@@ -48,9 +48,10 @@ def run_historical_backtest(
     turnover = turnover_from_exposure(regime_exposure)
     costs = cost_from_turnover(turnover, transaction_cost_bps, slippage_bps)
 
-    # Exposure decided at t is applied to return observed at t+1.
+    # Exposure and its execution cost decided at t are applied to the return observed at t+1.
     shifted_exposure = regime_exposure.shift(1).fillna(0.0)
-    regime_returns = (shifted_exposure * basket - costs).rename("regime_aware_vol_target")
+    shifted_costs = costs.shift(1).fillna(0.0)
+    regime_returns = (shifted_exposure * basket - shifted_costs).rename("regime_aware_vol_target")
 
     result_returns = pd.concat([btc, equal_weight, naive_returns, regime_returns], axis=1).fillna(0.0)
     result_equity = result_returns.apply(equity_curve)

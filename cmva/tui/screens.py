@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.table import Table
 
 from cmva.app import CMVAApplication
-from cmva.tui.widgets import dashboard_table, key_value_table
+from cmva.tui.widgets import dashboard_table, diagnostics_panel, key_value_table, methodology_panel, process_table
 
 
 def render_dashboard(app: CMVAApplication) -> Table:
@@ -27,6 +27,14 @@ def render_models(app: CMVAApplication) -> Table:
     return key_value_table("Models", app.state.model_status)
 
 
+def render_methodology(app: CMVAApplication):
+    return methodology_panel(app)
+
+
+def render_stat_tests(app: CMVAApplication):
+    return diagnostics_panel(app.state.latest_diagnostics)
+
+
 def render_regime(app: CMVAApplication) -> Table:
     if app.snapshot is None:
         return key_value_table("Regime", {"current": app.state.current_regime})
@@ -42,6 +50,10 @@ def render_backtest(app: CMVAApplication) -> Table:
         values["average_exposure_by_regime"] = app.snapshot.backtest.average_exposure_by_regime
         values["return_by_regime"] = app.snapshot.backtest.return_by_regime
     return key_value_table("Backtest", values or {"status": "no backtest"})
+
+
+def render_process(app: CMVAApplication) -> Table:
+    return process_table(app.state.process_timeline)
 
 
 def render_settings(app: CMVAApplication) -> Table:

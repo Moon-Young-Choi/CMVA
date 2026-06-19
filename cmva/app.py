@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from cmva.analysis_types import DiagnosticSnapshot, MethodStep
 from cmva.backtest.engine import BacktestResult, run_historical_backtest
 from cmva.backtest.live_paper import LivePaperBacktest
 from cmva.config import CMVAConfig, ensure_artifact_dirs, load_config
@@ -22,6 +23,7 @@ from cmva.features import FeatureBundle, compute_feature_bundle
 from cmva.forecast.volatility_forecaster import ForecastSnapshot, VolatilityForecaster
 from cmva.logging_config import configure_logging
 from cmva.models.garch import historical_garch_forecast
+from cmva.models.diagnostics import build_method_steps, run_statistical_diagnostics
 from cmva.models.selection import ModelSelectionResult, select_volatility_model
 from cmva.policy.regime_vol_target import RegimeVolTargetPolicy
 from cmva.regime.classifier import classify_regime_series
@@ -37,10 +39,12 @@ class AnalysisSnapshot:
     candles: pd.DataFrame
     features: FeatureBundle
     forecast: ForecastSnapshot
+    historical_forecast: pd.Series
     regimes: pd.Series
     shocks: pd.DataFrame
     backtest: BacktestResult | None
     validation: ValidationReport
+    diagnostics: DiagnosticSnapshot
 
 
 class CMVAApplication:
@@ -145,7 +149,38 @@ class CMVAApplication:
                 slippage_bps=self.config.slippage_bps,
                 periods_per_year=self.config.periods_per_year,
             )
-        snapshot = AnalysisSnapshot(candles, features, forecast, regimes, shocks, backtest, validation)
+        latest_target_exposure = self._target_exposure_for_snapshot(forecast, regimes)
+        garch_params = dict(self.forecaster.basket_model._fit_result.params)
+        diagnostics = run_statistical_diagnostics(
+            basket_returns=features.features["basket_return"],
+            forecast_vol=historical_forecast,
+            ewma_vol=features.features["ewma_vol"],
+            regimes=regimes,
+            shocks=shocks,
+            backtest_returns=backtest.returns if backtest is not None else None,
+            garch_params=garch_params,
+            generated_at=pd.Timestamp.now(tz="UTC"),
+            periods_per_year=self.config.periods_per_year,
+        )
+        diagnostics.method_steps = build_method_steps(
+            features=features.features,
+            forecast_vol=historical_forecast,
+            regimes=regimes,
+            shocks=shocks,
+            target_exposure=latest_target_exposure,
+            backtest_returns=backtest.returns if backtest is not None else None,
+        )
+        snapshot = AnalysisSnapshot(
+            candles,
+            features,
+            forecast,
+            historical_forecast,
+            regimes,
+            shocks,
+            backtest,
+            validation,
+            diagnostics,
+        )
         self.snapshot = snapshot
         self._persist_analysis(snapshot)
         self._update_state(snapshot, historical_forecast)
@@ -274,10 +309,23 @@ class CMVAApplication:
             )
             if equity_plot is not None:
                 plots.append(equity_plot)
-        export_markdown_report(markdown_path, summary, metrics, plots)
-        export_html_report(html_path, summary, metrics, plots)
+        export_markdown_report(markdown_path, summary, metrics, plots, self.state.latest_diagnostics)
+        export_html_report(html_path, summary, metrics, plots, self.state.latest_diagnostics)
         if self.snapshot is not None:
             export_validation_report(self.config.reports_dir / "validation_report.md", self.snapshot.validation.to_markdown())
+        now = pd.Timestamp.now(tz="UTC")
+        self.state.process_timeline.append(
+            MethodStep(
+                timestamp=now,
+                stage="Report export",
+                formula_id="markdown/html render from latest closed-candle snapshot",
+                inputs={"markdown": markdown_path.name, "html": html_path.name},
+                output="ready",
+                data_cutoff=self.state.latest_closed_time,
+                lookahead_status="passed",
+            )
+        )
+        self.state.process_timeline = self.state.process_timeline[-120:]
         self.state.log(f"Exported report {markdown_path}")
         return markdown_path, html_path
 
@@ -305,6 +353,15 @@ class CMVAApplication:
             forecast.iloc[-1] = latest_garch.volatility
         return forecast.ffill().fillna(features["market_vol"]).rename("forecast_vol")
 
+    def _target_exposure_for_snapshot(self, forecast: ForecastSnapshot, regimes: pd.Series) -> float | None:
+        if regimes.empty:
+            return None
+        policy = RegimeVolTargetPolicy(self.config.target_vol_per_period, self.config.max_leverage)
+        return policy.target_exposure(
+            float(forecast.basket_forecast.volatility),
+            str(regimes.iloc[-1]),
+        )
+
     def _update_state(self, snapshot: AnalysisSnapshot, forecast_series: pd.Series) -> None:
         features = snapshot.features.features
         if not features.empty:
@@ -315,11 +372,12 @@ class CMVAApplication:
             self.state.current_shock_type = (
                 str(snapshot.shocks["shock_type"].iloc[-1]) if not snapshot.shocks.empty else None
             )
-            policy = RegimeVolTargetPolicy(self.config.target_vol_per_period, self.config.max_leverage)
-            self.state.target_exposure = policy.target_exposure(
-                float(snapshot.forecast.basket_forecast.volatility),
-                self.state.current_regime,
-            )
+            self.state.target_exposure = self._target_exposure_for_snapshot(snapshot.forecast, snapshot.regimes)
+            self.state.push_trend("basket_return", float(features["basket_return"].iloc[-1]))
+            self.state.push_trend("forecast_vol", self.state.forecast_vol_1h)
+            self.state.push_trend("target_exposure", self.state.target_exposure)
+            if not snapshot.shocks.empty and "shock_score" in snapshot.shocks:
+                self.state.push_trend("regime_score", float(snapshot.shocks["shock_score"].iloc[-1]))
         self.state.model_status = {
             **snapshot.forecast.status,
             "basket_forecast_model": snapshot.forecast.basket_forecast.model_name,
@@ -351,6 +409,10 @@ class CMVAApplication:
                 "backtest_sharpe": strategy.get("sharpe"),
                 "backtest_turnover": strategy.get("turnover"),
             }
+        self.state.latest_diagnostics = snapshot.diagnostics
+        self.state.last_stat_test_run = snapshot.diagnostics.generated_at
+        self.state.process_timeline.extend(snapshot.diagnostics.method_steps)
+        self.state.process_timeline = self.state.process_timeline[-120:]
 
     def _persist_analysis(self, snapshot: AnalysisSnapshot) -> None:
         try:

@@ -6,6 +6,7 @@ import asyncio
 from typing import ClassVar
 
 from textual.app import App, ComposeResult
+from textual.containers import VerticalScroll
 from textual.widgets import Button, Footer, Header, Input, Label, Static, TabbedContent, TabPane
 
 from cmva.app import CMVAApplication
@@ -16,9 +17,12 @@ from cmva.tui.screens import (
     render_data,
     render_features,
     render_logs,
+    render_methodology,
     render_models,
+    render_process,
     render_regime,
     render_settings,
+    render_stat_tests,
 )
 from cmva.tui.theme import CSS
 
@@ -31,7 +35,19 @@ class CMVATuiApp(App):
         super().__init__()
         self.cmva = cmva
         self._tasks: list[asyncio.Task] = []
-        self._tab_ids = ["dashboard", "data", "features", "models", "regime", "backtest", "settings", "logs"]
+        self._tab_ids = [
+            "dashboard",
+            "data",
+            "features",
+            "models",
+            "methodology",
+            "stat_tests",
+            "regime",
+            "backtest",
+            "process",
+            "settings",
+            "logs",
+        ]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -45,39 +61,50 @@ class CMVATuiApp(App):
             with TabPane("Models", id="models"):
                 yield Button("Run model selection", id="models_select")
                 yield Static(id="models_content", classes="panel")
+            with TabPane("Methodology", id="methodology"):
+                with VerticalScroll(classes="scroll_panel"):
+                    yield Static(id="methodology_content", classes="panel")
+            with TabPane("Stat Tests", id="stat_tests"):
+                with VerticalScroll(classes="scroll_panel"):
+                    yield Static(id="stat_tests_content", classes="panel")
             with TabPane("Regime", id="regime"):
                 yield Static(id="regime_content", classes="panel")
             with TabPane("Backtest", id="backtest"):
                 yield Static(id="backtest_content", classes="panel")
+            with TabPane("Process", id="process"):
+                with VerticalScroll(classes="scroll_panel"):
+                    yield Static(id="process_content", classes="panel")
             with TabPane("Settings", id="settings"):
-                yield Label("Symbols", classes="field_label")
-                yield Input(value=", ".join(self.cmva.config.symbols), id="settings_symbols")
-                yield Label("Rolling windows: short, medium, long", classes="field_label")
-                yield Input(
-                    value=f"{self.cmva.config.rolling_short_window}, {self.cmva.config.rolling_medium_window}, {self.cmva.config.rolling_long_window}",
-                    id="settings_windows",
-                )
-                yield Label("Target annual vol, max leverage", classes="field_label")
-                yield Input(
-                    value=f"{self.cmva.config.target_annual_vol}, {self.cmva.config.max_leverage}",
-                    id="settings_risk",
-                )
-                yield Label("Cost bps, slippage bps", classes="field_label")
-                yield Input(
-                    value=f"{self.cmva.config.transaction_cost_bps}, {self.cmva.config.slippage_bps}",
-                    id="settings_costs",
-                )
-                yield Label("GARCH refit frequency, severe shock, moderate shock", classes="field_label")
-                yield Input(
-                    value=f"{self.cmva.config.garch_refit_frequency}, {self.cmva.config.severe_shock_threshold}, {self.cmva.config.moderate_shock_threshold}",
-                    id="settings_model",
-                )
-                yield Button("Apply from now", id="settings_apply_now")
-                yield Button("Recompute historical backtest", id="settings_recompute")
-                yield Button("Cancel", id="settings_cancel")
-                yield Static(id="settings_content", classes="panel")
+                with VerticalScroll(classes="scroll_panel", id="settings_scroll"):
+                    yield Label("Symbols", classes="field_label")
+                    yield Input(value=", ".join(self.cmva.config.symbols), id="settings_symbols")
+                    yield Label("Rolling windows: short, medium, long", classes="field_label")
+                    yield Input(
+                        value=f"{self.cmva.config.rolling_short_window}, {self.cmva.config.rolling_medium_window}, {self.cmva.config.rolling_long_window}",
+                        id="settings_windows",
+                    )
+                    yield Label("Target annual vol, max leverage", classes="field_label")
+                    yield Input(
+                        value=f"{self.cmva.config.target_annual_vol}, {self.cmva.config.max_leverage}",
+                        id="settings_risk",
+                    )
+                    yield Label("Cost bps, slippage bps", classes="field_label")
+                    yield Input(
+                        value=f"{self.cmva.config.transaction_cost_bps}, {self.cmva.config.slippage_bps}",
+                        id="settings_costs",
+                    )
+                    yield Label("GARCH refit frequency, severe shock, moderate shock", classes="field_label")
+                    yield Input(
+                        value=f"{self.cmva.config.garch_refit_frequency}, {self.cmva.config.severe_shock_threshold}, {self.cmva.config.moderate_shock_threshold}",
+                        id="settings_model",
+                    )
+                    yield Button("Apply from now", id="settings_apply_now")
+                    yield Button("Recompute historical backtest", id="settings_recompute")
+                    yield Button("Cancel", id="settings_cancel")
+                    yield Static(id="settings_content", classes="panel")
             with TabPane("Logs", id="logs"):
-                yield Static(id="logs_content", classes="panel")
+                with VerticalScroll(classes="scroll_panel"):
+                    yield Static(id="logs_content", classes="panel")
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -112,8 +139,11 @@ class CMVATuiApp(App):
             "data_content": render_data(self.cmva),
             "features_content": render_features(self.cmva),
             "models_content": render_models(self.cmva),
+            "methodology_content": render_methodology(self.cmva),
+            "stat_tests_content": render_stat_tests(self.cmva),
             "regime_content": render_regime(self.cmva),
             "backtest_content": render_backtest(self.cmva),
+            "process_content": render_process(self.cmva),
             "settings_content": render_settings(self.cmva),
             "logs_content": render_logs(self.cmva),
         }

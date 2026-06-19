@@ -13,6 +13,10 @@ TabbedContent {
     padding: 1 2;
 }
 
+.scroll_panel {
+    height: 1fr;
+}
+
 Input {
     margin: 0 2 1 2;
 }

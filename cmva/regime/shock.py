@@ -59,15 +59,16 @@ def compute_shock_series(
     moderate_threshold: float = 2.0,
 ) -> pd.DataFrame:
     basket = equal_weight_basket_return(returns)
-    forecast = forecast_vol.reindex(basket.index).replace(0.0, np.nan)
+    # A shock at t must be scored against the forecast made at t-1.
+    forecast = forecast_vol.reindex(basket.index).shift(1).replace(0.0, np.nan)
     shock_score = (basket.abs() / forecast).replace([np.inf, -np.inf], np.nan)
     rv_6h = realized_volatility(basket, 6, min_periods=3)
-    rv_base = rv_6h.rolling(window=max(window, 30), min_periods=6).median().replace(0.0, np.nan)
+    rv_base = rv_6h.rolling(window=max(window, 30), min_periods=6).median().shift(1).replace(0.0, np.nan)
     rv_jump_ratio = (rv_6h / rv_base).replace([np.inf, -np.inf], np.nan)
-    asset_scale = realized_volatility(returns, window).replace(0.0, np.nan)
+    asset_scale = realized_volatility(returns, window).shift(1).replace(0.0, np.nan)
     asset_shocks = returns.abs() / asset_scale
     breadth = (asset_shocks > moderate_threshold).mean(axis=1)
-    dispersion_threshold = dispersion.expanding(min_periods=10).quantile(0.75)
+    dispersion_threshold = dispersion.expanding(min_periods=10).quantile(0.75).shift(1)
 
     labels = []
     for idx in basket.index:

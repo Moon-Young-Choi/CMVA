@@ -23,6 +23,7 @@ class AppState:
     backtest_summary: dict[str, float | str | None] = field(default_factory=dict)
     model_status: dict[str, object] = field(default_factory=dict)
     data_status: dict[str, object] = field(default_factory=dict)
+    range_status: dict[str, object] = field(default_factory=dict)
     trend_buffers: dict[str, list[float]] = field(default_factory=dict)
     latest_diagnostics: DiagnosticSnapshot = field(default_factory=DiagnosticSnapshot)
     process_timeline: list[MethodStep] = field(default_factory=list)

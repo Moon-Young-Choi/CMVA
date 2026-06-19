@@ -32,6 +32,7 @@ from cmva.reports.html import export_html_report
 from cmva.reports.markdown import export_markdown_report, export_validation_report
 from cmva.reports.plots import export_equity_svg
 from cmva.state import AppState
+from cmva.time_ranges import slice_by_time_range
 
 
 @dataclass
@@ -63,6 +64,8 @@ class CMVAApplication:
             slippage_bps=self.config.slippage_bps,
         )
         self.snapshot: AnalysisSnapshot | None = None
+        self.range_backtest: BacktestResult | None = None
+        self.range_diagnostics: DiagnosticSnapshot | None = None
         self.model_selection: ModelSelectionResult | None = None
         self.last_model_selection_time: pd.Timestamp | None = None
 
@@ -256,7 +259,12 @@ class CMVAApplication:
         allowed = {
             "symbols",
             "interval",
+            "forecast_horizon",
             "historical_days",
+            "dashboard_time_range",
+            "forecast_time_range",
+            "backtest_time_range",
+            "allowed_time_ranges",
             "rolling_short_window",
             "rolling_medium_window",
             "rolling_long_window",
@@ -284,8 +292,24 @@ class CMVAApplication:
         if recompute and self.snapshot is not None:
             self.recompute(self.snapshot.candles, force_refit=True)
             self.state.log("Settings applied and historical backtest recomputed")
+        elif self.snapshot is not None:
+            self._update_range_views(self.snapshot)
+            self.state.log("Settings applied from now")
         else:
             self.state.log("Settings applied from now")
+
+    def apply_view_ranges(self, updates: dict[str, object], recompute_backtest: bool = False) -> None:
+        current = asdict(self.config)
+        for key in ("dashboard_time_range", "forecast_time_range", "backtest_time_range"):
+            if key in updates:
+                current[key] = str(updates[key])
+        self.config = CMVAConfig(**current)
+        if self.snapshot is not None:
+            self._update_range_views(self.snapshot)
+        action = "View ranges applied"
+        if recompute_backtest:
+            action = "View ranges applied and backtest range recomputed"
+        self.state.log(action)
 
     def cancel_settings(self) -> None:
         self.state.log("Settings change canceled")
@@ -297,14 +321,15 @@ class CMVAApplication:
 
     def export_report(self) -> tuple[Path, Path]:
         summary = self.summary()
-        metrics = self.snapshot.backtest.metrics if self.snapshot and self.snapshot.backtest else None
+        active_backtest = self.range_backtest or (self.snapshot.backtest if self.snapshot else None)
+        metrics = active_backtest.metrics if active_backtest is not None else None
         stamp = pd.Timestamp.now(tz="UTC").strftime("%Y%m%d_%H%M%S")
         markdown_path = self.config.reports_dir / f"cmva_report_{stamp}.md"
         html_path = self.config.reports_dir / f"cmva_report_{stamp}.html"
         plots: list[Path] = []
-        if self.snapshot is not None and self.snapshot.backtest is not None:
+        if active_backtest is not None:
             equity_plot = export_equity_svg(
-                self.snapshot.backtest.equity,
+                active_backtest.equity,
                 self.config.reports_dir / f"equity_curve_{stamp}.svg",
             )
             if equity_plot is not None:
@@ -336,6 +361,10 @@ class CMVAApplication:
             "current_regime": self.state.current_regime,
             "current_shock_type": self.state.current_shock_type,
             "forecast_vol_1h": self.state.forecast_vol_1h,
+            "forecast_horizon": self.config.forecast_horizon,
+            "dashboard_time_range": self.config.dashboard_time_range,
+            "forecast_time_range": self.config.forecast_time_range,
+            "backtest_time_range": self.config.backtest_time_range,
             "target_exposure": self.state.target_exposure,
             "live_paper_pnl": self.state.live_paper_pnl,
             "websocket_status": self.state.websocket_status,
@@ -413,6 +442,84 @@ class CMVAApplication:
         self.state.last_stat_test_run = snapshot.diagnostics.generated_at
         self.state.process_timeline.extend(snapshot.diagnostics.method_steps)
         self.state.process_timeline = self.state.process_timeline[-120:]
+        self._update_range_views(snapshot)
+
+    def _update_range_views(self, snapshot: AnalysisSnapshot) -> None:
+        latest = snapshot.features.features.index[-1] if not snapshot.features.features.empty else None
+        dashboard_features, dashboard_meta = slice_by_time_range(
+            snapshot.features.features,
+            self.config.dashboard_time_range,
+            latest=latest,
+        )
+        forecast_features, forecast_meta = slice_by_time_range(
+            snapshot.features.features,
+            self.config.forecast_time_range,
+            latest=latest,
+        )
+        forecast_series = snapshot.historical_forecast.reindex(forecast_features.index)
+        forecast_regimes = snapshot.regimes.reindex(forecast_features.index).ffill()
+        forecast_shocks = snapshot.shocks.reindex(forecast_features.index)
+        backtest_returns, backtest_meta = slice_by_time_range(
+            snapshot.features.returns,
+            self.config.backtest_time_range,
+            latest=latest,
+        )
+        backtest_forecast = snapshot.historical_forecast.reindex(backtest_returns.index)
+        backtest_regimes = snapshot.regimes.reindex(backtest_returns.index).ffill()
+        self.range_backtest = None
+        if len(backtest_returns.dropna(how="all")) > 2:
+            self.range_backtest = run_historical_backtest(
+                returns=backtest_returns,
+                forecast_vol=backtest_forecast,
+                regimes=backtest_regimes,
+                target_vol_per_period=self.config.target_vol_per_period,
+                max_leverage=self.config.max_leverage,
+                transaction_cost_bps=self.config.transaction_cost_bps,
+                slippage_bps=self.config.slippage_bps,
+                periods_per_year=self.config.periods_per_year,
+            )
+        garch_params = dict(self.forecaster.basket_model._fit_result.params)
+        active_diagnostics = run_statistical_diagnostics(
+            basket_returns=forecast_features.get("basket_return", pd.Series(dtype=float)),
+            forecast_vol=forecast_series,
+            ewma_vol=forecast_features.get("ewma_vol", pd.Series(dtype=float)),
+            regimes=forecast_regimes,
+            shocks=forecast_shocks,
+            backtest_returns=self.range_backtest.returns if self.range_backtest is not None else None,
+            garch_params=garch_params,
+            generated_at=pd.Timestamp.now(tz="UTC"),
+            periods_per_year=self.config.periods_per_year,
+        )
+        active_diagnostics.method_steps = snapshot.diagnostics.method_steps
+        self.range_diagnostics = active_diagnostics
+        self.state.latest_diagnostics = active_diagnostics
+        self.state.last_stat_test_run = active_diagnostics.generated_at
+        self.state.range_status = {
+            "data_interval": self.config.interval,
+            "forecast_horizon": self.config.forecast_horizon,
+            "dashboard": dashboard_meta.to_record(),
+            "forecast": forecast_meta.to_record(),
+            "backtest": backtest_meta.to_record(),
+            "available_ranges": ", ".join(value.upper() for value in self.config.allowed_time_ranges),
+        }
+        if self.range_backtest is not None:
+            strategy = self.range_backtest.metrics.get("regime_aware_vol_target", {})
+            self.state.backtest_summary = {
+                "backtest_range": self.config.backtest_time_range.upper(),
+                "backtest_start": backtest_meta.start,
+                "backtest_end": backtest_meta.end,
+                "backtest_observations": backtest_meta.actual_points,
+                "backtest_cumulative_return": strategy.get("cumulative_return"),
+                "backtest_max_drawdown": strategy.get("max_drawdown"),
+                "backtest_sharpe": strategy.get("sharpe"),
+                "backtest_turnover": strategy.get("turnover"),
+            }
+        else:
+            self.state.backtest_summary = {
+                "backtest_range": self.config.backtest_time_range.upper(),
+                "backtest_observations": backtest_meta.actual_points,
+                "status": "not enough observations",
+            }
 
     def _persist_analysis(self, snapshot: AnalysisSnapshot) -> None:
         try:

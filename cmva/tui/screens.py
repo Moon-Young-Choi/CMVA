@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.table import Table
 
 from cmva.app import CMVAApplication
-from cmva.tui.widgets import dashboard_table, diagnostics_panel, key_value_table, methodology_panel, process_table
+from cmva.tui.widgets import backtest_panel, dashboard_table, diagnostics_panel, key_value_table, methodology_panel, process_table
 
 
 def render_dashboard(app: CMVAApplication) -> Table:
@@ -32,7 +32,7 @@ def render_methodology(app: CMVAApplication):
 
 
 def render_stat_tests(app: CMVAApplication):
-    return diagnostics_panel(app.state.latest_diagnostics)
+    return diagnostics_panel(app.state.latest_diagnostics, app.state.range_status)
 
 
 def render_regime(app: CMVAApplication) -> Table:
@@ -45,11 +45,7 @@ def render_regime(app: CMVAApplication) -> Table:
 
 
 def render_backtest(app: CMVAApplication) -> Table:
-    values = dict(app.state.backtest_summary)
-    if app.snapshot and app.snapshot.backtest:
-        values["average_exposure_by_regime"] = app.snapshot.backtest.average_exposure_by_regime
-        values["return_by_regime"] = app.snapshot.backtest.return_by_regime
-    return key_value_table("Backtest", values or {"status": "no backtest"})
+    return backtest_panel(app)
 
 
 def render_process(app: CMVAApplication) -> Table:
@@ -62,7 +58,12 @@ def render_settings(app: CMVAApplication) -> Table:
         {
             "symbols": ", ".join(app.config.symbols),
             "interval": app.config.interval,
+            "forecast_horizon": app.config.forecast_horizon,
             "historical_days": app.config.historical_days,
+            "dashboard_time_range": app.config.dashboard_time_range,
+            "forecast_time_range": app.config.forecast_time_range,
+            "backtest_time_range": app.config.backtest_time_range,
+            "allowed_time_ranges": ", ".join(app.config.allowed_time_ranges),
             "rolling_windows": f"{app.config.rolling_short_window}, {app.config.rolling_medium_window}, {app.config.rolling_long_window}",
             "target_annual_vol": app.config.target_annual_vol,
             "max_leverage": app.config.max_leverage,

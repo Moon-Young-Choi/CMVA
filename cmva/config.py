@@ -8,14 +8,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from cmva.time_ranges import DEFAULT_ALLOWED_TIME_RANGES, normalize_time_range
+
 @dataclass
 class CMVAConfig:
     symbols: list[str] = field(
         default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
     )
     interval: str = "1h"
+    forecast_horizon: str = "1h"
     historical_days: int = 365
     bootstrap_limit: int = 1000
+    dashboard_time_range: str = "1d"
+    forecast_time_range: str = "1w"
+    backtest_time_range: str = "1y"
+    allowed_time_ranges: list[str] = field(default_factory=lambda: list(DEFAULT_ALLOWED_TIME_RANGES))
     rolling_short_window: int = 24
     rolling_medium_window: int = 168
     rolling_long_window: int = 720
@@ -38,6 +45,11 @@ class CMVAConfig:
         if not symbols:
             raise ValueError("at least one symbol is required")
         self.symbols = symbols
+        self.forecast_horizon = "1h"
+        self.dashboard_time_range = normalize_time_range(self.dashboard_time_range)
+        self.forecast_time_range = normalize_time_range(self.forecast_time_range)
+        self.backtest_time_range = normalize_time_range(self.backtest_time_range)
+        self.allowed_time_ranges = [normalize_time_range(value) for value in self.allowed_time_ranges]
         self.data_dir = Path(self.data_dir)
         self.reports_dir = Path(self.reports_dir)
 

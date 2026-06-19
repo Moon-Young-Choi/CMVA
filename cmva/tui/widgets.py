@@ -11,6 +11,8 @@ from rich.text import Text
 
 from cmva.analysis_types import DiagnosticSnapshot, MethodStep, StatTestResult
 from cmva.app import CMVAApplication
+from cmva.policy.regime_vol_target import RegimeVolTargetPolicy
+from cmva.tui.graphs import drawdown_frame, multi_series_panels, time_series_panel
 
 
 def key_value_table(title: str, values: dict[str, object]) -> Table:
@@ -23,12 +25,18 @@ def key_value_table(title: str, values: dict[str, object]) -> Table:
 
 
 def dashboard_table(app: CMVAApplication) -> Group:
+    dashboard_range = app.config.dashboard_time_range
     summary = key_value_table(
         "CMVA Dashboard",
         {
             "Mode": app.state.mode,
             "Latest closed candle": app.state.latest_closed_time,
             "Universe": ", ".join(app.config.symbols),
+            "Data interval": app.config.interval,
+            "Forecast horizon": app.config.forecast_horizon,
+            "Dashboard range": app.config.dashboard_time_range.upper(),
+            "Forecast range": app.config.forecast_time_range.upper(),
+            "Backtest range": app.config.backtest_time_range.upper(),
             "WebSocket": app.state.websocket_status,
             "Current regime": app.state.current_regime,
             "Shock status": app.state.current_shock_type,
@@ -39,19 +47,6 @@ def dashboard_table(app: CMVAApplication) -> Group:
             "Live paper PnL": _percent(app.state.live_paper_pnl),
         },
     )
-    trends = Table(title="Live Trends", expand=True)
-    trends.add_column("Series", style="cyan", no_wrap=True)
-    trends.add_column("Sparkline", style="white")
-    trends.add_column("Latest", style="white", no_wrap=True)
-    trend_specs = {
-        "basket_return": "Basket return",
-        "forecast_vol": "Forecast vol",
-        "target_exposure": "Exposure",
-        "regime_score": "Regime/shock score",
-    }
-    for key, label in trend_specs.items():
-        values = app.state.trend_buffers.get(key, [])
-        trends.add_row(label, _sparkline(values), _format_latest(values))
     status = Panel(
         Text.from_markup(
             f"[bold]Pipeline[/bold] {app.state.mode} | WebSocket {app.state.websocket_status} | "
@@ -60,7 +55,19 @@ def dashboard_table(app: CMVAApplication) -> Group:
         title="Status",
         expand=True,
     )
-    return Group(summary, trends, status)
+    trend_panels = []
+    if app.snapshot is not None and not app.snapshot.features.features.empty:
+        features = app.snapshot.features.features
+        trend_panels.append(time_series_panel(features["basket_return"], "Basket Return", dashboard_range, unit="%"))
+        trend_panels.append(time_series_panel(app.snapshot.historical_forecast, "Forecast Volatility", dashboard_range, unit="%"))
+        policy = RegimeVolTargetPolicy(app.config.target_vol_per_period, app.config.max_leverage)
+        exposure = policy.exposure_series(app.snapshot.historical_forecast, app.snapshot.regimes)
+        trend_panels.append(time_series_panel(exposure, "Target Exposure", dashboard_range, unit="x"))
+        if not app.snapshot.shocks.empty and "shock_score" in app.snapshot.shocks:
+            trend_panels.append(time_series_panel(app.snapshot.shocks["shock_score"], "Shock / Regime Score", dashboard_range))
+    else:
+        trend_panels.append(Panel("No trend data available yet.", title="Graphs", expand=True))
+    return Group(summary, status, *trend_panels)
 
 
 def methodology_panel(app: CMVAApplication) -> Group:
@@ -84,6 +91,17 @@ def methodology_panel(app: CMVAApplication) -> Group:
     formula_table.add_row("Regime", "expanding thresholds through t only", app.state.current_regime or "-", str(cutoff or "-"))
     formula_table.add_row("Exposure", "clip(target_vol / sigma * multiplier, 0, max_leverage)", _multiple(app.state.target_exposure), str(cutoff or "-"))
     formula_table.add_row("Backtest", "R_{t+1} = w_t r_{t+1} - c |w_t - w_{t-1}|", "shifted", str(cutoff or "-"))
+    range_policy = key_value_table(
+        "Range Policy",
+        {
+            "data_interval": app.config.interval,
+            "forecast_horizon": app.config.forecast_horizon,
+            "dashboard_time_range": app.config.dashboard_time_range.upper(),
+            "forecast_time_range": app.config.forecast_time_range.upper(),
+            "backtest_time_range": app.config.backtest_time_range.upper(),
+            "range_meaning": "display/evaluation window; forecast horizon remains 1h",
+        },
+    )
 
     steps = process_table(app.state.latest_diagnostics.method_steps[-20:] or app.state.process_timeline[-20:])
     note = Panel(
@@ -91,17 +109,70 @@ def methodology_panel(app: CMVAApplication) -> Group:
         title="Look-ahead discipline",
         expand=True,
     )
-    return Group(formula_table, note, steps)
+    return Group(formula_table, range_policy, note, steps)
 
 
-def diagnostics_panel(snapshot: DiagnosticSnapshot) -> Group:
+def diagnostics_panel(snapshot: DiagnosticSnapshot, range_status: dict[str, object] | None = None) -> Group:
+    status = range_status or {}
+    forecast = status.get("forecast", {})
+    forecast_label = forecast.get("label", "-") if isinstance(forecast, dict) else "-"
+    forecast_start = forecast.get("start", "-") if isinstance(forecast, dict) else "-"
+    forecast_end = forecast.get("end", "-") if isinstance(forecast, dict) else "-"
+    forecast_n = forecast.get("actual_points", "-") if isinstance(forecast, dict) else "-"
+    range_panel = Panel(
+        f"Forecast diagnostics range={forecast_label}  start={forecast_start}  end={forecast_end}  n={forecast_n}",
+        title="Active Diagnostic Window",
+        expand=True,
+    )
     return Group(
+        range_panel,
         _test_table("Model Diagnostics", snapshot.model_tests),
         _test_table("Forecast Evaluation", snapshot.forecast_tests),
         _test_table("Risk Coverage", snapshot.risk_tests),
         _test_table("Backtest Inference", snapshot.backtest_tests),
         _test_table("Regime / Shock Validation", snapshot.regime_tests),
     )
+
+
+def backtest_panel(app: CMVAApplication) -> Group:
+    values = dict(app.state.backtest_summary)
+    if app.range_backtest is not None:
+        values["average_exposure_by_regime"] = app.range_backtest.average_exposure_by_regime
+        values["return_by_regime"] = app.range_backtest.return_by_regime
+    summary = key_value_table("Backtest", values or {"status": "no backtest"})
+    panels = [summary]
+    if app.range_backtest is not None:
+        range_label = app.config.backtest_time_range
+        equity = app.range_backtest.equity
+        returns = app.range_backtest.returns
+        drawdown = drawdown_frame(equity)
+        panels.append(
+            multi_series_panels(
+                equity,
+                "Equity Curve",
+                range_label,
+                columns=["regime_aware_vol_target", "btc_buy_hold", "equal_weight_buy_hold"],
+            )
+        )
+        panels.append(
+            multi_series_panels(
+                drawdown,
+                "Drawdown",
+                range_label,
+                columns=["regime_aware_vol_target"],
+                unit="%",
+            )
+        )
+        panels.append(
+            multi_series_panels(
+                returns,
+                "Hourly Return",
+                range_label,
+                columns=["regime_aware_vol_target", "btc_buy_hold", "equal_weight_buy_hold"],
+                unit="%",
+            )
+        )
+    return Group(*panels)
 
 
 def process_table(steps: list[MethodStep]) -> Table:

@@ -10,6 +10,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Button, Footer, Header, Input, Label, Static, TabbedContent, TabPane
 
 from cmva.app import CMVAApplication
+from cmva.time_ranges import normalize_time_range
 from cmva.tui.bindings import BINDINGS
 from cmva.tui.screens import (
     render_backtest,
@@ -100,6 +101,14 @@ class CMVATuiApp(App):
                     )
                     yield Button("Apply from now", id="settings_apply_now")
                     yield Button("Recompute historical backtest", id="settings_recompute")
+                    yield Label("Dashboard, forecast, backtest ranges", classes="field_label")
+                    yield Input(
+                        value=f"{self.cmva.config.dashboard_time_range}, {self.cmva.config.forecast_time_range}, {self.cmva.config.backtest_time_range}",
+                        id="settings_ranges",
+                    )
+                    yield Label("Preset ranges: 1d, 1w, 1m, 3m, 6m, 1y, all. Custom examples: 12h, 10d, 4w", classes="field_label")
+                    yield Button("Apply view ranges", id="settings_apply_ranges")
+                    yield Button("Recompute backtest range", id="settings_recompute_range")
                     yield Button("Cancel", id="settings_cancel")
                     yield Static(id="settings_content", classes="panel")
             with TabPane("Logs", id="logs"):
@@ -203,6 +212,10 @@ class CMVATuiApp(App):
         elif event.button.id == "models_select":
             self.cmva.run_model_selection()
             self.refresh_views()
+        elif event.button.id == "settings_apply_ranges":
+            self._apply_ranges_from_form(recompute_backtest=False)
+        elif event.button.id == "settings_recompute_range":
+            self._apply_ranges_from_form(recompute_backtest=True)
 
     def _apply_settings_from_form(self, recompute: bool) -> None:
         try:
@@ -212,6 +225,17 @@ class CMVATuiApp(App):
             self.refresh_views()
             return
         self.cmva.apply_settings(updates, recompute=recompute)
+        self._reset_settings_form()
+        self.refresh_views()
+
+    def _apply_ranges_from_form(self, recompute_backtest: bool) -> None:
+        try:
+            updates = self._range_form_values()
+        except ValueError as exc:
+            self.cmva.state.log(f"Settings error: {exc}")
+            self.refresh_views()
+            return
+        self.cmva.apply_view_ranges(updates, recompute_backtest=recompute_backtest)
         self._reset_settings_form()
         self.refresh_views()
 
@@ -255,6 +279,16 @@ class CMVATuiApp(App):
             "moderate_shock_threshold": moderate_shock,
         }
 
+    def _range_form_values(self) -> dict[str, object]:
+        dashboard_range, forecast_range, backtest_range = _parse_ranges(
+            self.query_one("#settings_ranges", Input).value
+        )
+        return {
+            "dashboard_time_range": dashboard_range,
+            "forecast_time_range": forecast_range,
+            "backtest_time_range": backtest_range,
+        }
+
     def _reset_settings_form(self) -> None:
         self.query_one("#settings_symbols", Input).value = ", ".join(self.cmva.config.symbols)
         self.query_one("#settings_windows", Input).value = (
@@ -268,6 +302,9 @@ class CMVATuiApp(App):
         )
         self.query_one("#settings_model", Input).value = (
             f"{self.cmva.config.garch_refit_frequency}, {self.cmva.config.severe_shock_threshold}, {self.cmva.config.moderate_shock_threshold}"
+        )
+        self.query_one("#settings_ranges", Input).value = (
+            f"{self.cmva.config.dashboard_time_range}, {self.cmva.config.forecast_time_range}, {self.cmva.config.backtest_time_range}"
         )
 
 
@@ -301,3 +338,10 @@ def _parse_mixed_model_settings(raw: str) -> tuple[int, float, float]:
     if refit_frequency <= 0 or severe_shock <= 0 or moderate_shock <= 0:
         raise ValueError("model settings values must be positive")
     return refit_frequency, severe_shock, moderate_shock
+
+
+def _parse_ranges(raw: str) -> tuple[str, str, str]:
+    values = [part.strip() for part in raw.split(",") if part.strip()]
+    if len(values) != 3:
+        raise ValueError("range settings expects 3 comma-separated values")
+    return tuple(normalize_time_range(value) for value in values)  # type: ignore[return-value]

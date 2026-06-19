@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CMVA{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/tooltip.css') }}">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/">
+      <strong>CMVA</strong>
+      <span>Market State Analytics</span>
+    </a>
+    <nav>
+      <a class="{{ 'active' if page == 'dashboard' else '' }}" href="/">Dashboard</a>
+      <a class="{{ 'active' if page == 'markets' else '' }}" href="/markets">Markets</a>
+      <a class="{{ 'active' if page == 'volatility' else '' }}" href="/volatility">Volatility</a>
+      <a class="{{ 'active' if page == 'trend' else '' }}" href="/trend">Trend</a>
+      <a class="{{ 'active' if page == 'correlation_pca' else '' }}" href="/correlation-pca">Correlation / PCA</a>
+      <a class="{{ 'active' if page == 'shock_regime' else '' }}" href="/shock-regime">Shock & Regime</a>
+      <a class="{{ 'active' if page == 'models' else '' }}" href="/models">Models</a>
+      <a class="{{ 'active' if page == 'validation' else '' }}" href="/validation">Backtest / Validation</a>
+      <a class="{{ 'active' if page == 'methodology' else '' }}" href="/methodology">Methodology</a>
+      <a class="{{ 'active' if page == 'settings' else '' }}" href="/settings">Settings</a>
+      <a class="{{ 'active' if page == 'logs' else '' }}" href="/logs">Logs</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Public Binance Spot data only</p>
+        <h1>{% block heading %}CMVA{% endblock %}</h1>
+      </div>
+      <div class="run-status">
+        <span id="live-mode">{{ snapshot.mode }}</span>
+        <span id="live-ws">{{ snapshot.summary.websocket_status }}</span>
+        <span id="live-bootstrap">{{ snapshot.bootstrap_progress.phase or "idle" }}</span>
+      </div>
+    </header>
+    {% block content %}{% endblock %}
+  </main>
+  <div id="tooltip-layer" role="tooltip" hidden></div>
+  <script>
+    window.CMVA_GLOSSARY = {{ glossary | tojson }};
+  </script>
+  <script src="{{ url_for('static', path='/js/tooltip.js') }}"></script>
+  <script src="{{ url_for('static', path='/js/charts.js') }}"></script>
+  {% block scripts %}{% endblock %}
+  <script src="{{ url_for('static', path='/js/live.js') }}"></script>
+</body>
+</html>

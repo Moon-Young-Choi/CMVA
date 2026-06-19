@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}CMVA Logs{% endblock %}
+{% block heading %}Logs{% endblock %}
+{% block content %}
+<section class="panel">
+  <pre class="logs">{% for line in snapshot.logs %}{{ line }}
+{% else %}No logs yet.
+{% endfor %}</pre>
+</section>
+{% endblock %}

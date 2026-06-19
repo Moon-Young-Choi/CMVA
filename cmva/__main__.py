@@ -4,22 +4,23 @@ from __future__ import annotations
 
 import os
 import sys
+import argparse
 from pathlib import Path
 
 
 def main() -> None:
-    if any(arg in {"-h", "--help"} for arg in sys.argv[1:]):
-        print("CMVA - Crypto Market Volatility Analysis")
-        print("")
-        print("Usage:")
-        print("  python -m cmva")
-        print("  cmva")
-        print("")
-        print("This opens the interactive terminal research app.")
-        return
+    parser = argparse.ArgumentParser(
+        prog="cmva",
+        description="CMVA - localhost crypto market state analytics and model validation dashboard.",
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Host interface for the local web server.")
+    parser.add_argument("--port", default=8765, type=int, help="Port for the local web server.")
+    parser.add_argument("--no-browser", action="store_true", help="Start the server without opening a browser.")
+    parser.add_argument("--tui", action="store_true", help="Open the legacy Textual TUI fallback instead of the web dashboard.")
+    args = parser.parse_args()
     _reexec_with_local_venv_if_available()
     try:
-        from cmva.app import run
+        from cmva.app import run, run_tui
     except ModuleNotFoundError as exc:
         missing = exc.name or "a required dependency"
         print(f"CMVA cannot start because `{missing}` is not installed in this Python environment.")
@@ -31,7 +32,10 @@ def main() -> None:
         print("If `.venv` does not exist yet, run:")
         print("  ./run_cmva.sh")
         raise SystemExit(1) from None
-    run()
+    if args.tui:
+        run_tui()
+    else:
+        run(host=args.host, port=args.port, open_browser=not args.no_browser)
 
 
 def _reexec_with_local_venv_if_available() -> None:

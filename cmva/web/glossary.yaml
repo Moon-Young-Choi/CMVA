@@ -1,0 +1,125 @@
+volatility:
+  title: "Volatility"
+  short: "Return variability over a window. CMVA uses it to describe market state, not to predict price direction."
+  formula: "sqrt(mean(r_i^2))"
+  details_url: "/methodology#volatility"
+realized_volatility:
+  title: "Realized Volatility"
+  short: "The observed standard deviation of closed-candle returns over a trailing duration window."
+  formula: "sqrt(mean(r_i^2))"
+  details_url: "/methodology#realized-volatility"
+ewma:
+  title: "EWMA Volatility"
+  short: "A volatility estimate that gives more weight to recent closed-candle returns."
+  formula: "sqrt(EWMA(r_t^2))"
+  details_url: "/methodology#ewma"
+garch_forecast:
+  title: "GARCH Forecast Volatility"
+  short: "The conditional standard deviation forecast for the next candle return. It is not a price direction forecast."
+  formula: "sigma_{t+1|t}"
+  details_url: "/methodology#garch"
+range_volatility:
+  title: "Range-Based Volatility"
+  short: "A volatility estimate derived from each candle's high-low range."
+  formula: "sqrt(log(H/L)^2 / (4 log 2))"
+  details_url: "/methodology#range-volatility"
+standardized_residual:
+  title: "Standardized Residual"
+  short: "A return scaled by the volatility forecast available before that return was observed."
+  formula: "r_t / sigma_{t|t-1}"
+  details_url: "/methodology#standardized-residual"
+shock_score:
+  title: "Shock Score"
+  short: "How large the latest return was relative to the prior volatility forecast."
+  formula: "|r_t| / sigma_{t|t-1}"
+  details_url: "/methodology#shock"
+shock_breadth:
+  title: "Shock Breadth"
+  short: "The share of tracked symbols with unusually large returns at the same candle."
+  formula: "count(|r_i|/vol_i > threshold) / N"
+  details_url: "/methodology#shock"
+average_correlation:
+  title: "Average Pairwise Correlation"
+  short: "The average rolling correlation across symbol return pairs. Higher values mean assets are moving together."
+  formula: "mean(corr(r_i, r_j))"
+  details_url: "/methodology#correlation"
+pca1_share:
+  title: "PCA1 Explained Variance Share"
+  short: "The share of return variance explained by the first common factor. Higher values indicate stronger common-risk behavior."
+  formula: "lambda_1 / sum(lambda_i)"
+  details_url: "/methodology#pca"
+dispersion:
+  title: "Cross-Sectional Dispersion"
+  short: "How different symbol returns are from each other in the current market window."
+  formula: "std_i(r_{i,t})"
+  details_url: "/methodology#dispersion"
+rolling_beta:
+  title: "Rolling BTC Beta"
+  short: "Sensitivity of each symbol's returns to BTC returns over the rolling window."
+  formula: "cov(r_i, r_BTC) / var(r_BTC)"
+  details_url: "/methodology#beta"
+trend_slope:
+  title: "Trend Slope"
+  short: "The rolling OLS slope of log price. It describes path direction, not a buy or sell signal."
+  formula: "OLS(log_price ~ time)"
+  details_url: "/methodology#trend"
+trend_tstat:
+  title: "Trend T-stat"
+  short: "The trend slope divided by its standard error, used as a diagnostic confidence measure."
+  formula: "slope / SE(slope)"
+  details_url: "/methodology#trend"
+qlike:
+  title: "QLIKE"
+  short: "A loss metric for variance forecasts. Lower values indicate better volatility forecast fit."
+  formula: "r_t^2 / h_t + log(h_t)"
+  details_url: "/methodology#validation"
+rmse:
+  title: "RMSE"
+  short: "Root mean squared forecast error for realized variance versus forecast variance."
+  formula: "sqrt(mean((r_t^2 - h_t)^2))"
+  details_url: "/methodology#validation"
+mae:
+  title: "MAE"
+  short: "Mean absolute forecast error for realized variance versus forecast variance."
+  formula: "mean(|r_t^2 - h_t|)"
+  details_url: "/methodology#validation"
+ljung_box:
+  title: "Ljung-Box"
+  short: "A residual autocorrelation diagnostic. It checks whether the model left serial dependence behind."
+  formula: "Q = n(n+2) sum rho_k^2/(n-k)"
+  details_url: "/methodology#diagnostics"
+kupiec:
+  title: "Kupiec Coverage"
+  short: "A VaR exception-rate diagnostic based on the volatility forecast. It is not investment proof."
+  formula: "LR_uc = -2 log(L0/L1)"
+  details_url: "/methodology#diagnostics"
+walk_forward:
+  title: "Walk-Forward Validation"
+  short: "Forecasts are evaluated only against later closed-candle outcomes, preserving time order."
+  formula: "forecast_{t|t-1} vs r_t"
+  details_url: "/methodology#validation"
+lookahead_bias:
+  title: "Look-Ahead Bias"
+  short: "A testing error where future information leaks into a past forecast or label."
+  formula: "features_t use data <= t"
+  details_url: "/methodology#lookahead"
+closed_candle:
+  title: "Closed Candle"
+  short: "A completed Binance kline. CMVA stores and analyzes only candles whose WebSocket x flag is true."
+  formula: "kline.x == true"
+  details_url: "/methodology#closed-candle"
+forming_candle:
+  title: "Forming Candle"
+  short: "The current in-progress Binance kline. CMVA may display it, but it is excluded from storage and research calculations until closed."
+  formula: "kline.x == false"
+  details_url: "/methodology#closed-candle"
+bootstrap_progress:
+  title: "Bootstrap Progress"
+  short: "The current stage of loading local candles, fetching missing Binance Spot history, storing closed candles, and recomputing analytics."
+  formula: "closed REST klines + selected interval"
+  details_url: "/methodology#data-pipeline"
+validation_issue:
+  title: "Data Validation Issue"
+  short: "A continuity, duplicate, OHLC, volume, coverage, or closed-candle discipline issue detected before analytics are interpreted."
+  formula: "validate(candles)"
+  details_url: "/methodology#data-pipeline"

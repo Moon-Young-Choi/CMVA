@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Markets{% endblock %}
+{% block heading %}Markets{% endblock %}
+{% block content %}
+<section class="grid metrics">
+  {{ ui.metric_card("Accumulated Rows", snapshot.data_accumulation.total_rows, "closed_candle") }}
+  {{ ui.metric_card("Interval", snapshot.data_accumulation.interval) }}
+  {{ ui.metric_card("First Closed Candle", snapshot.data_accumulation.first_open_time, "closed_candle") }}
+  {{ ui.metric_card("Latest Closed Candle", snapshot.data_accumulation.latest_open_time, "closed_candle") }}
+  {{ ui.metric_card("Coverage Hours", snapshot.data_accumulation.coverage_hours, "closed_candle") }}
+  {{ ui.metric_card("Bootstrap Phase", snapshot.bootstrap_progress.phase, "bootstrap_progress") }}
+  {{ ui.metric_card("Fetched Candles", snapshot.bootstrap_progress.fetched_candles, "bootstrap_progress") }}
+  {{ ui.metric_card("Data Quality", snapshot.data_quality.status, "validation_issue") }}
+  {{ ui.metric_card("Validation Issues", snapshot.data_quality.issue_count, "validation_issue") }}
+</section>
+
+<section class="grid metrics">
+  {{ ui.metric_card("Research Dataset", snapshot.data_policy.research_dataset, "closed_candle") }}
+  {{ ui.metric_card("Forming Candle Usage", snapshot.data_policy.forming_candle_usage, "forming_candle") }}
+  {{ ui.metric_card("Current Fetch Symbol", snapshot.bootstrap_progress.current_symbol, "bootstrap_progress") }}
+  {{ ui.metric_card("Bootstrap Updated", snapshot.bootstrap_progress.updated_at, "bootstrap_progress") }}
+</section>
+
+<section class="panel">
+  <h2>Data To Validation Flow</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Status</th>
+          <th>Evidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Closed Candle Data</td>
+          <td>{{ snapshot.data_quality.status }}</td>
+          <td>{{ snapshot.pipeline.data_rows }} accumulated rows across {{ snapshot.data_accumulation.symbols | length }} symbols</td>
+        </tr>
+        <tr>
+          <td>Feature Matrix</td>
+          <td>{{ "ready" if snapshot.pipeline.feature_rows else "waiting" }}</td>
+          <td>{{ snapshot.pipeline.feature_rows }} feature timestamps</td>
+        </tr>
+        <tr>
+          <td>Volatility Model</td>
+          <td>{{ snapshot.pipeline.model or "waiting" }}</td>
+          <td>{{ snapshot.pipeline.forecast_points }} forecast points</td>
+        </tr>
+        <tr>
+          <td>Walk-Forward Validation</td>
+          <td>{{ "ready" if snapshot.pipeline.validation_observations else "waiting" }}</td>
+          <td>{{ snapshot.pipeline.validation_observations }} validation observations</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Accumulation By Symbol</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Rows</th>
+          <th>Closed Rows</th>
+          <th>First Open Time</th>
+          <th>Latest Open Time</th>
+          <th>Gap Count</th>
+          <th>Missing Estimate</th>
+          <th>Duplicate Rows</th>
+          <th>OHLC Issues</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in snapshot.data_accumulation.symbols %}
+        <tr>
+          <td>{{ row.symbol }}</td>
+          <td>{{ row.rows }}</td>
+          <td>{{ row.closed_rows }}</td>
+          <td>{{ row.first_open_time }}</td>
+          <td>{{ row.latest_open_time }}</td>
+          <td>{{ row.missing_gap_count }}</td>
+          <td>{{ row.estimated_missing_candles if row.estimated_missing_candles is not none else "-" }}</td>
+          <td>{{ row.duplicate_rows }}</td>
+          <td>{{ row.ohlc_issue_rows }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9">No closed candles loaded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>{{ ui.help_label("Forming Candle", "forming_candle") }}</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Interval</th>
+          <th>Open Time</th>
+          <th>Close Time</th>
+          <th>Open</th>
+          <th>High</th>
+          <th>Low</th>
+          <th>Close</th>
+          <th>Volume</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if snapshot.forming_candle %}
+        <tr>
+          <td>{{ snapshot.forming_candle.symbol }}</td>
+          <td>{{ snapshot.forming_candle.interval }}</td>
+          <td>{{ snapshot.forming_candle.open_time }}</td>
+          <td>{{ snapshot.forming_candle.close_time }}</td>
+          <td>{{ snapshot.forming_candle.open }}</td>
+          <td>{{ snapshot.forming_candle.high }}</td>
+          <td>{{ snapshot.forming_candle.low }}</td>
+          <td>{{ snapshot.forming_candle.close }}</td>
+          <td>{{ snapshot.forming_candle.volume }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9">No forming candle is currently displayed.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>{{ ui.help_label("Data Quality Issues", "validation_issue") }}</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Severity</th>
+          <th>Check</th>
+          <th>Symbol</th>
+          <th>Count</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for issue in snapshot.data_quality.issues %}
+        <tr>
+          <td>{{ issue.severity }}</td>
+          <td>{{ issue.check }}</td>
+          <td>{{ issue.symbol or "ALL" }}</td>
+          <td>{{ issue.count }}</td>
+          <td>{{ issue.message }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">No validation issues detected.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Latest Closed Candles</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>{{ ui.help_label("Open Time", "closed_candle") }}</th>
+          <th>{{ ui.help_label("Open", "closed_candle") }}</th>
+          <th>{{ ui.help_label("High", "closed_candle") }}</th>
+          <th>{{ ui.help_label("Low", "closed_candle") }}</th>
+          <th>{{ ui.help_label("Close", "closed_candle") }}</th>
+          <th>Volume</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in snapshot.market_rows %}
+        <tr>
+          <td>{{ row.symbol }}</td>
+          <td>{{ row.open_time }}</td>
+          <td>{{ row.open }}</td>
+          <td>{{ row.high }}</td>
+          <td>{{ row.low }}</td>
+          <td>{{ row.close }}</td>
+          <td>{{ row.volume }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">No closed candles loaded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Recent Accumulated Candles</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Interval</th>
+          <th>{{ ui.help_label("Open Time", "closed_candle") }}</th>
+          <th>{{ ui.help_label("Open", "closed_candle") }}</th>
+          <th>{{ ui.help_label("High", "closed_candle") }}</th>
+          <th>{{ ui.help_label("Low", "closed_candle") }}</th>
+          <th>{{ ui.help_label("Close", "closed_candle") }}</th>
+          <th>Volume</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in snapshot.recent_candles %}
+        <tr>
+          <td>{{ row.symbol }}</td>
+          <td>{{ row.interval }}</td>
+          <td>{{ row.open_time }}</td>
+          <td>{{ row.open }}</td>
+          <td>{{ row.high }}</td>
+          <td>{{ row.low }}</td>
+          <td>{{ row.close }}</td>
+          <td>{{ row.volume }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">No accumulated candles yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

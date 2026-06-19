@@ -6,33 +6,28 @@ import asyncio
 from dataclasses import asdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pandas as pd
 
-from cmva.analysis_types import DiagnosticSnapshot, MethodStep
-from cmva.backtest.engine import BacktestResult, run_historical_backtest
-from cmva.backtest.live_paper import LivePaperBacktest
+from cmva.analysis_types import DiagnosticSnapshot
 from cmva.config import CMVAConfig, ensure_artifact_dirs, load_config
-from cmva.data.candle import Candle, candles_to_frame
+from cmva.data.candle import Candle
 from cmva.data.rest_client import BinanceRestClient
 from cmva.data.storage import CandleStorage, save_frame
 from cmva.data.validation import ValidationReport, validate_candles
 from cmva.data.websocket_client import BinanceWebSocketClient
+from cmva.engine.interval import latest_closed_open_time
 from cmva.features import FeatureBundle, compute_feature_bundle
 from cmva.forecast.volatility_forecaster import ForecastSnapshot, VolatilityForecaster
 from cmva.logging_config import configure_logging
 from cmva.models.garch import historical_garch_forecast
 from cmva.models.diagnostics import build_method_steps, run_statistical_diagnostics
 from cmva.models.selection import ModelSelectionResult, select_volatility_model
-from cmva.policy.regime_vol_target import RegimeVolTargetPolicy
 from cmva.regime.classifier import classify_regime_series
 from cmva.regime.shock import compute_shock_series
-from cmva.reports.html import export_html_report
-from cmva.reports.markdown import export_markdown_report, export_validation_report
-from cmva.reports.plots import export_equity_svg
 from cmva.state import AppState
 from cmva.time_ranges import slice_by_time_range
+from cmva.validation import ModelValidationResult, run_walk_forward_validation
 
 
 @dataclass
@@ -43,7 +38,7 @@ class AnalysisSnapshot:
     historical_forecast: pd.Series
     regimes: pd.Series
     shocks: pd.DataFrame
-    backtest: BacktestResult | None
+    model_validation: ModelValidationResult | None
     validation: ValidationReport
     diagnostics: DiagnosticSnapshot
 
@@ -59,69 +54,125 @@ class CMVAApplication:
             refit_frequency=self.config.garch_refit_frequency,
             min_observations=100,
         )
-        self.paper = LivePaperBacktest(
-            transaction_cost_bps=self.config.transaction_cost_bps,
-            slippage_bps=self.config.slippage_bps,
-        )
         self.snapshot: AnalysisSnapshot | None = None
-        self.range_backtest: BacktestResult | None = None
+        self.range_model_validation: ModelValidationResult | None = None
         self.range_diagnostics: DiagnosticSnapshot | None = None
         self.model_selection: ModelSelectionResult | None = None
         self.last_model_selection_time: pd.Timestamp | None = None
 
     async def bootstrap(self, fetch_remote: bool = True) -> None:
         self.state.mode = "BOOTSTRAP"
+        self._set_bootstrap_progress("loading_cache", current_symbol=None, completed_symbols=0)
         self.state.log("Loading local candle cache")
-        candles = self.storage.load_many(self.config.symbols)
+        candles = self._active_interval_frame(self.storage.load_many(self.config.symbols))
         if fetch_remote:
             try:
                 candles = await self.fetch_missing_history(candles)
             except Exception as exc:
                 self.state.mode = "DEGRADED"
+                self._set_bootstrap_progress("degraded", error=str(exc))
                 self.state.log(f"Historical fetch degraded: {exc}")
         if candles.empty:
             self.state.mode = "DEGRADED"
             self.state.log("No candles available yet")
             self.state.data_status = {"rows": 0, "validation": "no data"}
+            self._set_bootstrap_progress("degraded", error="no candle rows available")
             return
+        self._set_bootstrap_progress("computing", current_symbol=None)
         self.recompute(candles, force_refit=True)
-        self.paper.set_next_exposure(self.state.target_exposure or 0.0)
         if self.state.mode != "DEGRADED":
             self.state.mode = "LIVE"
+            self._set_bootstrap_progress("ready", current_symbol=None, completed_symbols=len(self.config.symbols))
 
     async def fetch_missing_history(self, existing: pd.DataFrame) -> pd.DataFrame:
-        now = pd.Timestamp(datetime.now(timezone.utc)).floor(self.config.interval)
+        now = latest_closed_open_time(pd.Timestamp(datetime.now(timezone.utc)), self.config.interval)
         desired_start = now - pd.Timedelta(days=self.config.historical_days)
         fetched: list[Candle] = []
-        for symbol in self.config.symbols:
-            symbol_existing = existing.loc[existing["symbol"] == symbol] if not existing.empty else pd.DataFrame()
+        fetched_count = 0
+        total_symbols = len(self.config.symbols)
+        self._set_bootstrap_progress(
+            "fetching",
+            completed_symbols=0,
+            total_symbols=total_symbols,
+            fetched_candles=fetched_count,
+            target_start=desired_start,
+            target_end=now,
+        )
+        for position, symbol in enumerate(self.config.symbols, start=1):
+            self._set_bootstrap_progress(
+                "fetching",
+                current_symbol=symbol,
+                completed_symbols=position - 1,
+                total_symbols=total_symbols,
+                fetched_candles=fetched_count,
+                target_start=desired_start,
+                target_end=now,
+            )
+            symbol_existing = existing.loc[
+                (existing["symbol"] == symbol) & (existing["interval"] == self.config.interval)
+            ] if not existing.empty else pd.DataFrame()
             if symbol_existing.empty:
                 start = desired_start
             else:
                 latest = pd.to_datetime(symbol_existing["open_time"], utc=True).max()
-                start = max(latest + pd.Timedelta(self.config.interval), desired_start)
+                start = max(latest + self.config.interval_delta, desired_start)
             if start <= now:
                 self.state.log(f"Fetching {symbol} klines from {start}")
-                fetched.extend(
-                    await self.rest_client.fetch_historical_range(
-                        symbol=symbol,
-                        interval=self.config.interval,
-                        start_time=start,
-                        end_time=now,
-                        limit=self.config.bootstrap_limit,
-                    )
+                symbol_fetched = await self.rest_client.fetch_historical_range(
+                    symbol=symbol,
+                    interval=self.config.interval,
+                    start_time=start,
+                    end_time=now,
+                    limit=self.config.bootstrap_limit,
                 )
+                fetched.extend(symbol_fetched)
+                fetched_count += len(symbol_fetched)
+            self._set_bootstrap_progress(
+                "fetching",
+                current_symbol=symbol,
+                completed_symbols=position,
+                total_symbols=total_symbols,
+                fetched_candles=fetched_count,
+                target_start=desired_start,
+                target_end=now,
+            )
         if fetched:
+            self._set_bootstrap_progress(
+                "storing",
+                current_symbol=None,
+                completed_symbols=total_symbols,
+                total_symbols=total_symbols,
+                fetched_candles=fetched_count,
+                target_start=desired_start,
+                target_end=now,
+            )
             self.storage.upsert_closed(fetched)
-        return self.storage.load_many(self.config.symbols)
+        return self._active_interval_frame(self.storage.load_many(self.config.symbols))
+
+    def _set_bootstrap_progress(self, phase: str, **updates: object) -> None:
+        progress = {
+            "phase": phase,
+            "interval": self.config.interval,
+            "total_symbols": len(self.config.symbols),
+            "completed_symbols": 0,
+            "current_symbol": None,
+            "fetched_candles": 0,
+            **self.state.bootstrap_progress,
+            **updates,
+            "updated_at": pd.Timestamp.now(tz="UTC"),
+        }
+        progress["phase"] = phase
+        self.state.bootstrap_progress = progress
 
     def recompute(self, candles: pd.DataFrame, force_refit: bool = False) -> AnalysisSnapshot:
+        candles = self._active_interval_frame(candles)
         validation = validate_candles(candles, self.config.interval, self.config.symbols)
         features = compute_feature_bundle(
             candles,
             short_window=self.config.rolling_short_window,
             medium_window=self.config.rolling_medium_window,
             long_window=self.config.rolling_long_window,
+            trend_window=self.config.window_bar_counts["trend_window"],
         )
         forecast = self.forecaster.forecast(features.returns, force_refit=force_refit)
         self._maybe_run_model_selection(features.features["basket_return"])
@@ -140,19 +191,15 @@ class CMVAApplication:
             severe_threshold=self.config.severe_shock_threshold,
             moderate_threshold=self.config.moderate_shock_threshold,
         )
-        backtest = None
+        model_validation = None
         if len(features.returns.dropna(how="all")) > 2:
-            backtest = run_historical_backtest(
-                returns=features.returns,
+            model_validation = run_walk_forward_validation(
+                basket_returns=features.features["basket_return"],
                 forecast_vol=historical_forecast,
+                ewma_vol=features.features["ewma_vol"],
+                realized_vol=features.features["market_vol"],
                 regimes=regimes,
-                target_vol_per_period=self.config.target_vol_per_period,
-                max_leverage=self.config.max_leverage,
-                transaction_cost_bps=self.config.transaction_cost_bps,
-                slippage_bps=self.config.slippage_bps,
-                periods_per_year=self.config.periods_per_year,
             )
-        latest_target_exposure = self._target_exposure_for_snapshot(forecast, regimes)
         garch_params = dict(self.forecaster.basket_model._fit_result.params)
         diagnostics = run_statistical_diagnostics(
             basket_returns=features.features["basket_return"],
@@ -160,7 +207,7 @@ class CMVAApplication:
             ewma_vol=features.features["ewma_vol"],
             regimes=regimes,
             shocks=shocks,
-            backtest_returns=backtest.returns if backtest is not None else None,
+            validation_losses=model_validation.losses if model_validation is not None else None,
             garch_params=garch_params,
             generated_at=pd.Timestamp.now(tz="UTC"),
             periods_per_year=self.config.periods_per_year,
@@ -170,8 +217,6 @@ class CMVAApplication:
             forecast_vol=historical_forecast,
             regimes=regimes,
             shocks=shocks,
-            target_exposure=latest_target_exposure,
-            backtest_returns=backtest.returns if backtest is not None else None,
         )
         snapshot = AnalysisSnapshot(
             candles,
@@ -180,7 +225,7 @@ class CMVAApplication:
             historical_forecast,
             regimes,
             shocks,
-            backtest,
+            model_validation,
             validation,
             diagnostics,
         )
@@ -196,17 +241,15 @@ class CMVAApplication:
         if not candle.is_closed:
             self.process_current_candle(candle)
             return
+        current = self.state.data_status.get("current_candle")
+        if isinstance(current, dict) and current.get("symbol") == candle.symbol and current.get("open_time") == candle.open_time:
+            self.state.data_status.pop("current_candle", None)
         if self.state.paused:
             self.state.log(f"Paused; received closed candle for {candle.symbol} at {candle.open_time}")
             return
         candles = self.storage.upsert_closed([candle])
-        all_candles = self.storage.load_many(self.config.symbols)
+        all_candles = self._active_interval_frame(self.storage.load_many(self.config.symbols))
         snapshot = self.recompute(all_candles, force_refit=False)
-        latest_return = snapshot.features.features["basket_return"].dropna()
-        if not latest_return.empty:
-            self.paper.settle_closed_candle(latest_return.index[-1], float(latest_return.iloc[-1]))
-            self.paper.set_next_exposure(self.state.target_exposure or 0.0)
-            self.state.live_paper_pnl = self.paper.cumulative_return
         if not candles.empty:
             self.state.log(f"Processed closed candle {candle.symbol} {candle.open_time}")
 
@@ -225,7 +268,7 @@ class CMVAApplication:
                 self.process_current_candle(candle)
 
     def force_refit(self) -> None:
-        candles = self.storage.load_many(self.config.symbols)
+        candles = self._active_interval_frame(self.storage.load_many(self.config.symbols))
         if not candles.empty:
             self.recompute(candles, force_refit=True)
             self.state.log("Forced GARCH refit")
@@ -233,7 +276,7 @@ class CMVAApplication:
     def rerun_backtest(self) -> None:
         if self.snapshot is not None:
             self.recompute(self.snapshot.candles, force_refit=False)
-            self.state.log("Historical backtest recomputed")
+            self.state.log("Walk-forward validation recomputed")
 
     def run_model_selection(self) -> ModelSelectionResult | None:
         if self.snapshot is None:
@@ -259,24 +302,27 @@ class CMVAApplication:
         allowed = {
             "symbols",
             "interval",
+            "forecast_horizon_bars",
             "forecast_horizon",
             "historical_days",
             "dashboard_time_range",
             "forecast_time_range",
             "backtest_time_range",
             "allowed_time_ranges",
+            "volatility_window",
+            "correlation_window",
+            "pca_window",
+            "trend_window",
+            "regime_threshold_window",
             "rolling_short_window",
             "rolling_medium_window",
             "rolling_long_window",
             "min_threshold_history",
             "garch_refit_frequency",
-            "target_annual_vol",
-            "max_leverage",
-            "transaction_cost_bps",
-            "slippage_bps",
             "severe_shock_threshold",
             "moderate_shock_threshold",
             "shock_breadth_threshold",
+            "use_cpp",
         }
         current = asdict(self.config)
         for key, value in updates.items():
@@ -287,11 +333,9 @@ class CMVAApplication:
         self.storage = CandleStorage(self.config.cleaned_dir)
         self.rest_client = BinanceRestClient(self.config.rest_base_url)
         self.forecaster.refit_frequency = self.config.garch_refit_frequency
-        self.paper.transaction_cost_bps = self.config.transaction_cost_bps
-        self.paper.slippage_bps = self.config.slippage_bps
         if recompute and self.snapshot is not None:
             self.recompute(self.snapshot.candles, force_refit=True)
-            self.state.log("Settings applied and historical backtest recomputed")
+            self.state.log("Settings applied and walk-forward validation recomputed")
         elif self.snapshot is not None:
             self._update_range_views(self.snapshot)
             self.state.log("Settings applied from now")
@@ -319,55 +363,23 @@ class CMVAApplication:
         self.state.mode = "PAUSED" if self.state.paused else "LIVE"
         self.state.log("Paused live processing" if self.state.paused else "Resumed live processing")
 
-    def export_report(self) -> tuple[Path, Path]:
-        summary = self.summary()
-        active_backtest = self.range_backtest or (self.snapshot.backtest if self.snapshot else None)
-        metrics = active_backtest.metrics if active_backtest is not None else None
-        stamp = pd.Timestamp.now(tz="UTC").strftime("%Y%m%d_%H%M%S")
-        markdown_path = self.config.reports_dir / f"cmva_report_{stamp}.md"
-        html_path = self.config.reports_dir / f"cmva_report_{stamp}.html"
-        plots: list[Path] = []
-        if active_backtest is not None:
-            equity_plot = export_equity_svg(
-                active_backtest.equity,
-                self.config.reports_dir / f"equity_curve_{stamp}.svg",
-            )
-            if equity_plot is not None:
-                plots.append(equity_plot)
-        export_markdown_report(markdown_path, summary, metrics, plots, self.state.latest_diagnostics)
-        export_html_report(html_path, summary, metrics, plots, self.state.latest_diagnostics)
-        if self.snapshot is not None:
-            export_validation_report(self.config.reports_dir / "validation_report.md", self.snapshot.validation.to_markdown())
-        now = pd.Timestamp.now(tz="UTC")
-        self.state.process_timeline.append(
-            MethodStep(
-                timestamp=now,
-                stage="Report export",
-                formula_id="markdown/html render from latest closed-candle snapshot",
-                inputs={"markdown": markdown_path.name, "html": html_path.name},
-                output="ready",
-                data_cutoff=self.state.latest_closed_time,
-                lookahead_status="passed",
-            )
-        )
-        self.state.process_timeline = self.state.process_timeline[-120:]
-        self.state.log(f"Exported report {markdown_path}")
-        return markdown_path, html_path
-
     def summary(self) -> dict[str, object]:
         return {
             "mode": self.state.mode,
             "latest_closed_time": self.state.latest_closed_time,
             "current_regime": self.state.current_regime,
             "current_shock_type": self.state.current_shock_type,
-            "forecast_vol_1h": self.state.forecast_vol_1h,
+            "forecast_vol": self.state.forecast_vol,
             "forecast_horizon": self.config.forecast_horizon,
+            "interval": self.config.interval,
+            "window_bar_counts": self.config.window_bar_counts,
             "dashboard_time_range": self.config.dashboard_time_range,
             "forecast_time_range": self.config.forecast_time_range,
             "backtest_time_range": self.config.backtest_time_range,
-            "target_exposure": self.state.target_exposure,
-            "live_paper_pnl": self.state.live_paper_pnl,
             "websocket_status": self.state.websocket_status,
+            "data_rows": self.state.data_status.get("rows"),
+            "validation": self.state.data_status.get("validation"),
+            "validation_issues": self.state.data_status.get("validation_issues"),
             **self.state.backtest_summary,
         }
 
@@ -382,29 +394,21 @@ class CMVAApplication:
             forecast.iloc[-1] = latest_garch.volatility
         return forecast.ffill().fillna(features["market_vol"]).rename("forecast_vol")
 
-    def _target_exposure_for_snapshot(self, forecast: ForecastSnapshot, regimes: pd.Series) -> float | None:
-        if regimes.empty:
-            return None
-        policy = RegimeVolTargetPolicy(self.config.target_vol_per_period, self.config.max_leverage)
-        return policy.target_exposure(
-            float(forecast.basket_forecast.volatility),
-            str(regimes.iloc[-1]),
-        )
-
     def _update_state(self, snapshot: AnalysisSnapshot, forecast_series: pd.Series) -> None:
         features = snapshot.features.features
+        current_candle = self.state.data_status.get("current_candle")
         if not features.empty:
             latest_idx = features.index[-1]
             self.state.latest_closed_time = latest_idx
-            self.state.forecast_vol_1h = float(snapshot.forecast.basket_forecast.volatility)
+            self.state.forecast_vol = float(snapshot.forecast.basket_forecast.volatility)
             self.state.current_regime = str(snapshot.regimes.iloc[-1]) if not snapshot.regimes.empty else None
             self.state.current_shock_type = (
                 str(snapshot.shocks["shock_type"].iloc[-1]) if not snapshot.shocks.empty else None
             )
-            self.state.target_exposure = self._target_exposure_for_snapshot(snapshot.forecast, snapshot.regimes)
             self.state.push_trend("basket_return", float(features["basket_return"].iloc[-1]))
-            self.state.push_trend("forecast_vol", self.state.forecast_vol_1h)
-            self.state.push_trend("target_exposure", self.state.target_exposure)
+            self.state.push_trend("forecast_vol", self.state.forecast_vol)
+            if "trend_strength" in features:
+                self.state.push_trend("trend_strength", float(features["trend_strength"].iloc[-1]))
             if not snapshot.shocks.empty and "shock_score" in snapshot.shocks:
                 self.state.push_trend("regime_score", float(snapshot.shocks["shock_score"].iloc[-1]))
         self.state.model_status = {
@@ -429,15 +433,13 @@ class CMVAApplication:
             "symbols": self.config.symbols,
             "validation": "ok" if snapshot.validation.is_valid else "issues",
             "validation_issues": len(snapshot.validation.issues),
+            "validation_issue_details": [asdict(issue) for issue in snapshot.validation.issues],
+            "symbol_rows": snapshot.validation.symbol_rows,
         }
-        if snapshot.backtest is not None:
-            strategy = snapshot.backtest.metrics.get("regime_aware_vol_target", {})
-            self.state.backtest_summary = {
-                "backtest_cumulative_return": strategy.get("cumulative_return"),
-                "backtest_max_drawdown": strategy.get("max_drawdown"),
-                "backtest_sharpe": strategy.get("sharpe"),
-                "backtest_turnover": strategy.get("turnover"),
-            }
+        if current_candle is not None:
+            self.state.data_status["current_candle"] = current_candle
+        if snapshot.model_validation is not None:
+            self.state.backtest_summary = snapshot.model_validation.summary()
         self.state.latest_diagnostics = snapshot.diagnostics
         self.state.last_stat_test_run = snapshot.diagnostics.generated_at
         self.state.process_timeline.extend(snapshot.diagnostics.method_steps)
@@ -459,24 +461,21 @@ class CMVAApplication:
         forecast_series = snapshot.historical_forecast.reindex(forecast_features.index)
         forecast_regimes = snapshot.regimes.reindex(forecast_features.index).ffill()
         forecast_shocks = snapshot.shocks.reindex(forecast_features.index)
-        backtest_returns, backtest_meta = slice_by_time_range(
-            snapshot.features.returns,
+        backtest_features, backtest_meta = slice_by_time_range(
+            snapshot.features.features,
             self.config.backtest_time_range,
             latest=latest,
         )
-        backtest_forecast = snapshot.historical_forecast.reindex(backtest_returns.index)
-        backtest_regimes = snapshot.regimes.reindex(backtest_returns.index).ffill()
-        self.range_backtest = None
-        if len(backtest_returns.dropna(how="all")) > 2:
-            self.range_backtest = run_historical_backtest(
-                returns=backtest_returns,
+        backtest_forecast = snapshot.historical_forecast.reindex(backtest_features.index)
+        backtest_regimes = snapshot.regimes.reindex(backtest_features.index).ffill()
+        self.range_model_validation = None
+        if len(backtest_features.dropna(how="all")) > 2 and "basket_return" in backtest_features:
+            self.range_model_validation = run_walk_forward_validation(
+                basket_returns=backtest_features["basket_return"],
                 forecast_vol=backtest_forecast,
+                ewma_vol=backtest_features.get("ewma_vol", pd.Series(dtype=float)),
+                realized_vol=backtest_features.get("market_vol", pd.Series(dtype=float)),
                 regimes=backtest_regimes,
-                target_vol_per_period=self.config.target_vol_per_period,
-                max_leverage=self.config.max_leverage,
-                transaction_cost_bps=self.config.transaction_cost_bps,
-                slippage_bps=self.config.slippage_bps,
-                periods_per_year=self.config.periods_per_year,
             )
         garch_params = dict(self.forecaster.basket_model._fit_result.params)
         active_diagnostics = run_statistical_diagnostics(
@@ -485,7 +484,7 @@ class CMVAApplication:
             ewma_vol=forecast_features.get("ewma_vol", pd.Series(dtype=float)),
             regimes=forecast_regimes,
             shocks=forecast_shocks,
-            backtest_returns=self.range_backtest.returns if self.range_backtest is not None else None,
+            validation_losses=self.range_model_validation.losses if self.range_model_validation is not None else None,
             garch_params=garch_params,
             generated_at=pd.Timestamp.now(tz="UTC"),
             periods_per_year=self.config.periods_per_year,
@@ -497,22 +496,19 @@ class CMVAApplication:
         self.state.range_status = {
             "data_interval": self.config.interval,
             "forecast_horizon": self.config.forecast_horizon,
+            "window_bar_counts": self.config.window_bar_counts,
             "dashboard": dashboard_meta.to_record(),
             "forecast": forecast_meta.to_record(),
             "backtest": backtest_meta.to_record(),
             "available_ranges": ", ".join(value.upper() for value in self.config.allowed_time_ranges),
         }
-        if self.range_backtest is not None:
-            strategy = self.range_backtest.metrics.get("regime_aware_vol_target", {})
+        if self.range_model_validation is not None:
             self.state.backtest_summary = {
                 "backtest_range": self.config.backtest_time_range.upper(),
                 "backtest_start": backtest_meta.start,
                 "backtest_end": backtest_meta.end,
                 "backtest_observations": backtest_meta.actual_points,
-                "backtest_cumulative_return": strategy.get("cumulative_return"),
-                "backtest_max_drawdown": strategy.get("max_drawdown"),
-                "backtest_sharpe": strategy.get("sharpe"),
-                "backtest_turnover": strategy.get("turnover"),
+                **self.range_model_validation.metrics,
             }
         else:
             self.state.backtest_summary = {
@@ -524,9 +520,8 @@ class CMVAApplication:
     def _persist_analysis(self, snapshot: AnalysisSnapshot) -> None:
         try:
             save_frame(snapshot.features.features, self.config.features_dir / "features.parquet")
-            if snapshot.backtest is not None:
-                save_frame(snapshot.backtest.returns, self.config.backtests_dir / "strategy_returns.parquet")
-                save_frame(snapshot.backtest.equity, self.config.backtests_dir / "equity.parquet")
+            if snapshot.model_validation is not None:
+                save_frame(snapshot.model_validation.losses, self.config.validation_dir / "model_validation_losses.parquet")
         except Exception as exc:
             self.state.log(f"Artifact persistence skipped: {exc}")
 
@@ -539,9 +534,21 @@ class CMVAApplication:
         self.model_selection = result
         self.last_model_selection_time = now
 
+    def _active_interval_frame(self, candles: pd.DataFrame) -> pd.DataFrame:
+        if candles.empty or "interval" not in candles:
+            return candles
+        return candles.loc[candles["interval"] == self.config.interval].copy()
 
-def run() -> None:
+
+def run_tui() -> None:
     configure_logging()
     from cmva.tui.app import CMVATuiApp
 
     CMVATuiApp(CMVAApplication()).run()
+
+
+def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) -> None:
+    configure_logging()
+    from cmva.web.app import serve
+
+    serve(CMVAApplication(), host=host, port=port, open_browser=open_browser)

@@ -11,10 +11,13 @@ def synthetic_candles():
         symbols: list[str] | None = None,
         periods: int = 48,
         start: str = "2026-01-01 00:00:00+00:00",
+        interval: str = "1h",
         closed: bool = True,
     ) -> pd.DataFrame:
         selected = symbols or ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-        index = pd.date_range(start=start, periods=periods, freq="1h", tz="UTC")
+        freq = {"15m": "15min", "1h": "1h", "4h": "4h", "1d": "1d"}.get(interval, interval)
+        delta = pd.Timedelta(freq)
+        index = pd.date_range(start=start, periods=periods, freq=freq, tz="UTC")
         rows = []
         for symbol_idx, symbol in enumerate(selected):
             base = 100.0 + symbol_idx * 10.0
@@ -27,9 +30,9 @@ def synthetic_candles():
                 rows.append(
                     {
                         "symbol": symbol,
-                        "interval": "1h",
+                        "interval": interval,
                         "open_time": timestamp,
-                        "close_time": timestamp + pd.Timedelta(hours=1) - pd.Timedelta(milliseconds=1),
+                        "close_time": timestamp + delta - pd.Timedelta(milliseconds=1),
                         "open": open_price,
                         "high": high,
                         "low": low,

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Dashboard{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block content %}
+<section class="grid metrics">
+  {{ ui.metric_card("Interval", snapshot.summary.interval) }}
+  {{ ui.metric_card("Accumulated Rows", snapshot.data_accumulation.total_rows, "closed_candle") }}
+  {{ ui.metric_card("Forecast Horizon", snapshot.summary.forecast_horizon, "garch_forecast") }}
+  {{ ui.metric_card("Latest Closed Candle", snapshot.summary.latest_closed_time, "closed_candle") }}
+  {{ ui.metric_card("Data Validation", snapshot.summary.validation) }}
+  {{ ui.metric_card("Forecast Volatility", snapshot.summary.forecast_vol, "garch_forecast") }}
+  {{ ui.metric_card("Market Vol", snapshot.latest_features.market_vol, "realized_volatility") }}
+  {{ ui.metric_card("Trend Strength", snapshot.latest_features.trend_strength, "trend_slope") }}
+  {{ ui.metric_card("Average Correlation", snapshot.latest_features.avg_pairwise_corr, "average_correlation") }}
+  {{ ui.metric_card("PCA1 Share", snapshot.latest_features.pca1_share, "pca1_share") }}
+  {{ ui.metric_card("Shock", snapshot.summary.current_shock_type, "shock_score") }}
+  {{ ui.metric_card("Regime", snapshot.summary.current_regime) }}
+  {{ ui.metric_card("Best QLIKE Model", snapshot.validation.best_qlike_model, "qlike") }}
+</section>
+
+<section class="panel">
+  <h2>Market State Timelines</h2>
+  <div class="chart-grid">
+    <canvas class="line-chart" data-series="basket_return" aria-label="Basket return chart"></canvas>
+    <canvas class="line-chart" data-series="forecast_vol" aria-label="Forecast volatility chart"></canvas>
+    <canvas class="line-chart" data-series="market_vol" aria-label="Market volatility chart"></canvas>
+    <canvas class="line-chart" data-series="shock_score" aria-label="Shock score chart"></canvas>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Window Conversion</h2>
+  <dl class="kv-list">
+    {% for key, value in snapshot.summary.window_bar_counts.items() %}
+    <div><dt>{{ key }}</dt><dd>{{ value }} bars</dd></div>
+    {% endfor %}
+  </dl>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.CMVA_SNAPSHOT = {{ snapshot | tojson }};
+  window.renderCmvaCharts(window.CMVA_SNAPSHOT);
+</script>
+{% endblock %}

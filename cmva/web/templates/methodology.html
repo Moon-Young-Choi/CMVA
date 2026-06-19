@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Methodology{% endblock %}
+{% block heading %}Methodology{% endblock %}
+{% block content %}
+<section class="panel prose">
+  <h2 id="closed-candle">{{ ui.help_label("Closed Candle Discipline", "closed_candle") }}</h2>
+  <p>CMVA may display a current forming candle, but only closed candles enter storage, features, models, shock labels, regimes, diagnostics, and validation.</p>
+  <h2 id="data-pipeline">{{ ui.help_label("Data Accumulation", "bootstrap_progress") }}</h2>
+  <p>Historical Binance Spot candles are accumulated by symbol and interval, then checked for missing gaps, duplicate timestamps, OHLC consistency, volume validity, and unclosed candle leakage.</p>
+  <h2 id="volatility">{{ ui.help_label("Volatility", "volatility") }}</h2>
+  <p>Realized volatility, EWMA volatility, range volatility, and GARCH forecast volatility describe return variability over the selected candle interval.</p>
+  <h2 id="garch">{{ ui.help_label("GARCH Forecast", "garch_forecast") }}</h2>
+  <p>The forecast is <code>sigma_{t+1|t}</code>, the next-candle volatility forecast from information available at time <code>t</code>. It is not a price direction forecast.</p>
+  <h2 id="trend">{{ ui.help_label("Trend", "trend_slope") }}</h2>
+  <p>Trend features use rolling OLS on log price and diagnostic t-statistics. They describe the observed path and are not buy or sell instructions.</p>
+  <h2 id="correlation">{{ ui.help_label("Correlation", "average_correlation") }}</h2>
+  <p>Correlation, BTC beta, PCA1 share, and dispersion describe whether the market is moving together or separating by symbol.</p>
+  <h2 id="shock">{{ ui.help_label("Shock Score", "shock_score") }}</h2>
+  <p>Shock scoring compares the return observed at <code>t</code> with the forecast made before <code>t</code>.</p>
+  <h2 id="validation">{{ ui.help_label("Walk-Forward Validation", "walk_forward") }}</h2>
+  <p>Backtesting in CMVA means model validation: forecast losses, calibration, and residual tests. It does not mean simulated strategy PnL.</p>
+  <h2 id="lookahead">{{ ui.help_label("Look-Ahead Bias", "lookahead_bias") }}</h2>
+  <p>Features at <code>t</code> use data through <code>t</code>; forecast evaluation aligns <code>forecast_{t|t-1}</code> against <code>r_t</code>.</p>
+</section>
+{% endblock %}

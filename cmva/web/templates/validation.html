@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Validation{% endblock %}
+{% block heading %}Backtest / Validation{% endblock %}
+{% block content %}
+<section class="grid metrics">
+  {{ ui.metric_card("Validation Observations", snapshot.validation.validation_observations, "walk_forward") }}
+  {{ ui.metric_card("GARCH RMSE", snapshot.validation.garch_rmse, "rmse") }}
+  {{ ui.metric_card("EWMA RMSE", snapshot.validation.ewma_rmse, "rmse") }}
+  {{ ui.metric_card("Naive RMSE", snapshot.validation.naive_rmse, "rmse") }}
+  {{ ui.metric_card("GARCH QLIKE", snapshot.validation.garch_qlike, "qlike") }}
+  {{ ui.metric_card("EWMA QLIKE", snapshot.validation.ewma_qlike, "qlike") }}
+  {{ ui.metric_card("Naive QLIKE", snapshot.validation.naive_qlike, "qlike") }}
+  {{ ui.metric_card("Best QLIKE Model", snapshot.validation.best_qlike_model, "qlike") }}
+</section>
+{{ ui.diagnostics_table("Model Validation Diagnostics", snapshot.diagnostics.validation) }}
+<section class="panel">
+  <h2>QLIKE Loss Timelines</h2>
+  <div class="chart-grid">
+    <canvas class="line-chart" data-series="garch_qlike"></canvas>
+    <canvas class="line-chart" data-series="ewma_qlike"></canvas>
+    <canvas class="line-chart" data-series="naive_qlike"></canvas>
+  </div>
+</section>
+<section class="panel">
+  <h2>Recent QLIKE Losses</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Time</th><th>GARCH</th><th>EWMA</th><th>Naive</th></tr></thead>
+      <tbody>
+      {% for row in snapshot.validation_losses[-40:] %}
+        <tr><td>{{ row.open_time or row.index }}</td><td>{{ row.garch_qlike }}</td><td>{{ row.ewma_qlike }}</td><td>{{ row.naive_qlike }}</td></tr>
+      {% else %}
+        <tr><td colspan="4">No validation losses yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+<section class="panel">
+  <h2>GARCH Calibration Deciles</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Forecast Decile</th><th>Forecast Vol</th><th>Realized Abs Return</th><th>Observations</th></tr></thead>
+      <tbody>
+      {% for row in snapshot.calibration_by_decile %}
+        <tr>
+          <td>{{ row.forecast_decile or row.index }}</td>
+          <td>{{ row.forecast_vol }}</td>
+          <td>{{ row.realized_abs_return }}</td>
+          <td>{{ row.observations }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">No calibration table yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+<section class="panel">
+  <h2>Realized Volatility By Regime</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Regime</th><th>Realized Vol</th><th>Mean Abs Return</th><th>Observations</th></tr></thead>
+      <tbody>
+      {% for row in snapshot.realized_vol_by_regime %}
+        <tr>
+          <td>{{ row.regime or row.index }}</td>
+          <td>{{ row.realized_vol }}</td>
+          <td>{{ row.mean_abs_return }}</td>
+          <td>{{ row.observations }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">No regime validation table yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>window.CMVA_SNAPSHOT = {{ snapshot | tojson }}; window.renderCmvaCharts(window.CMVA_SNAPSHOT);</script>
+{% endblock %}

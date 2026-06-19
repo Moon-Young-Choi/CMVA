@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "cmva"
 version = "0.1.0"
-description = "Crypto Market Volatility Analysis interactive terminal research app"
+description = "Crypto Market Volatility Analysis localhost market-state analytics dashboard"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -21,6 +21,11 @@ dependencies = [
   "websockets",
   "pyarrow",
   "pydantic",
+  "fastapi",
+  "uvicorn",
+  "jinja2",
+  "pyyaml",
+  "python-multipart",
 ]
 
 [project.optional-dependencies]

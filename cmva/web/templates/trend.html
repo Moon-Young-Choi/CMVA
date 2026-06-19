@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Trend{% endblock %}
+{% block heading %}Trend{% endblock %}
+{% block content %}
+<section class="grid metrics">
+  {{ ui.metric_card("Trend Slope", snapshot.latest_features.trend_slope, "trend_slope") }}
+  {{ ui.metric_card("Trend T-stat", snapshot.latest_features.trend_tstat, "trend_tstat") }}
+  {{ ui.metric_card("Trend Strength", snapshot.latest_features.trend_strength, "trend_slope") }}
+  {{ ui.metric_card("Rolling Autocorrelation", snapshot.latest_features.trend_autocorr, "trend_slope") }}
+  {{ ui.metric_card("Up Candle Ratio", snapshot.latest_features.up_down_ratio, "trend_slope") }}
+</section>
+<section class="panel">
+  <h2>Trend Timelines</h2>
+  <div class="chart-grid">
+    <canvas class="line-chart" data-series="trend_strength"></canvas>
+    <canvas class="line-chart" data-series="trend_slope"></canvas>
+    <canvas class="line-chart" data-series="trend_tstat"></canvas>
+    <canvas class="line-chart" data-series="up_down_ratio"></canvas>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>window.CMVA_SNAPSHOT = {{ snapshot | tojson }}; window.renderCmvaCharts(window.CMVA_SNAPSHOT);</script>
+{% endblock %}

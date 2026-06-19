@@ -14,6 +14,7 @@ data/cleaned/
 data/features/
 data/models/
 data/backtests/
+data/validation/
 reports/
 logs/
 cmva.log

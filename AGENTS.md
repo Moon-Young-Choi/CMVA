@@ -1,320 +1,209 @@
 # CMVA Agent Guide
 
-이 문서는 CMVA를 수정하는 Codex/agent가 반드시 지켜야 하는 현재 프로젝트 기준입니다. CMVA는 여러 CLI 명령어 묶음이 아니라, `python -m cmva` 또는 `cmva` 하나로 실행되는 Textual 기반 interactive terminal research app입니다.
+Build CMVA as a local browser-based crypto market state analytics and model validation dashboard.
 
-## 1. Product Mission
-
-CMVA, Crypto Market Volatility Analysis, 는 Binance Spot 공개 1시간봉 데이터를 사용해 암호화폐 시장의 변동성, 충격, 국면, simulated exposure, backtest 성과를 실시간으로 관찰하는 연구용 TUI 앱입니다.
-
-핵심 원칙:
-
-- 실제 주문, private key, 계좌 접근, 선물/레버리지 거래는 절대 포함하지 않는다.
-- closed candle만 연구 계산에 사용한다.
-- forecast는 가격 방향 예측이 아니라 다음 1시간 변동성 예측이다.
-- 모든 feature, forecast, regime, shock, exposure, backtest는 look-ahead bias 없이 계산한다.
-- Dashboard/Forecast/Backtest time range는 서로 독립적으로 설정 가능해야 한다.
-
-## 2. Runtime Contract
-
-실행:
+Primary command:
 
 ```bash
-./run_cmva.sh
+python -m cmva
 ```
 
-또는:
-
-```bash
-.venv/bin/python -m cmva
-```
-
-설치된 환경에서는:
+or:
 
 ```bash
 cmva
 ```
 
-검증:
+This command starts a local FastAPI/Uvicorn server bound to `127.0.0.1` and opens:
 
-```bash
-.venv/bin/python -m pytest
-.venv/bin/python -m compileall -q cmva tests
-python3 -m cmva --help
+```text
+http://127.0.0.1:8765
 ```
 
-현재 기본 데이터 정책:
+Use `python -m cmva --no-browser` for headless runs and `python -m cmva --tui` only as a legacy fallback.
 
-- Binance Spot public data only
-- candle interval: `1h`
-- forecast horizon: `1h`
-- historical bootstrap: `365` days
-- default universe: `BTCUSDT`, `ETHUSDT`, `SOLUSDT`, `BNBUSDT`, `XRPUSDT`
-- dashboard range: `1d`
-- forecast diagnostic range: `1w`
-- backtest evaluation range: `1y`
+## Product Scope
 
-## 3. Non-Negotiable Invariants
+CMVA is not a trading bot.
 
-Closed-candle discipline:
+Do not implement:
 
-- REST historical klines are closed candles.
-- WebSocket current candles may be displayed, but must not be persisted or used in calculations until Binance kline `x=True`.
+- strategy generation
+- order execution
+- fill simulation
+- PnL attribution
+- arbitrage opportunity monitoring
+- private API keys
+- exchange account access
+- futures, margin, or leverage trading
+- portfolio exposure policy
+- target exposure
+- paper PnL
+
+Core objective:
+
+CMVA analyzes the current crypto market state using public Binance Spot market data. It computes volatility, trend, correlation, PCA common-risk structure, shock labels, and market regimes using selected closed candle intervals. It validates analysis models using walk-forward model backtesting and statistical diagnostics. Trading strategy design is explicitly out of scope.
+
+## Data And Interval Policy
+
+- Use Binance Spot public klines.
+- The candle interval must be user-selectable.
+- Supported MVP intervals: `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, `1d`, `3d`, `1w`, `1M`.
+- Default interval: `15m`.
+- Advanced `1s` support may exist later but is not required in MVP.
+- Use REST klines for historical bootstrap.
+- Use WebSocket `kline_<interval>` streams for live updates.
+
+Closed candle rule:
+
+- Current unclosed candles may be displayed.
+- Only closed candles may enter storage, validation, feature calculation, model fitting, forecast generation, shock detection, regime classification, and model validation.
+- The WebSocket kline `x` field must determine whether the candle is closed.
 - Never forward-fill missing prices silently.
 
-No-look-ahead discipline:
+Interval policy:
 
-- Feature at `t` uses data through `t`.
-- Forecast used for shock scoring must be `sigma_{t|t-1}` against `r_t`.
-- Exposure decided at `t` is applied to return at `t+1`.
-- Backtest cost timing is `R_{t+1} = w_t r_{t+1} - c |w_t - w_{t-1}|`.
-- Rolling/expanding thresholds must not use full-sample future data.
+- Do not hardcode `1h`.
+- All rolling windows must be defined in time durations, such as `24h`, `7d`, `30d`, `90d`.
+- Convert duration windows to bar counts based on the selected interval.
+- Display the conversion in the UI.
 
-Forecast meaning:
+## Analysis Modules
 
-```text
-forecast_vol_1h = sigma_{t+1|t}
-```
+Volatility:
 
-This is volatility, not price direction.
+- realized volatility
+- EWMA volatility
+- GARCH forecast volatility
+- range-based volatility
+- volatility percentile
+- standardized residual
 
-Range meaning:
+Trend:
 
-- `forecast_horizon` is the mathematical prediction horizon and remains `1h`.
-- `dashboard_time_range` is the visual Dashboard graph window.
-- `forecast_time_range` is the forecast/stat-test display and diagnostic window.
-- `backtest_time_range` is the historical backtest/statistical evaluation sample.
+- rolling OLS slope of log price
+- slope t-stat
+- volatility-adjusted trend strength
+- trend consistency
+- rolling autocorrelation
 
-Supported ranges:
+Correlation / PCA:
 
-```text
-1d, 1w, 1m, 3m, 6m, 1y, all
-```
+- rolling average pairwise correlation
+- rolling BTC beta
+- PCA1 explained variance share
+- PCA loadings
+- cross-sectional dispersion
 
-Custom examples such as `12h`, `10d`, and `4w` are valid.
+Shock / Regime:
 
-## 4. Component Map
+- shock score
+- shock breadth
+- realized volatility jump ratio
+- current shock label
+- current regime label
+- regime transition matrix
 
-Top-level orchestration:
+Data accumulation:
 
-- `cmva/__main__.py`: user entrypoint and helpful dependency/venv guidance.
-- `cmva/app.py`: application orchestration, bootstrap, recompute, range-specific views, report export.
-- `cmva/config.py`: defaults and config loading.
-- `cmva/state.py`: app state shared by services and TUI.
-- `cmva/analysis_types.py`: `StatTestResult`, `MethodStep`, `DiagnosticSnapshot`.
-- `cmva/time_ranges.py`: range parsing, normalization, slicing, and range metadata.
-- `cmva/logging_config.py`: file-based logging that must not pollute TUI output.
+- total closed candle rows
+- symbol-level row counts
+- symbol-level first/latest closed candle time
+- active interval coverage
+- recent accumulated candle table
+- validation issue counts
 
-Data layer:
+## Models And Validation
 
-- `cmva/data/rest_client.py`: Binance Spot REST klines.
-- `cmva/data/websocket_client.py`: Binance kline stream.
-- `cmva/data/candle.py`: `Candle` dataclass and frame conversion.
-- `cmva/data/storage.py`: parquet storage under `data/cleaned`.
-- `cmva/data/validation.py`: continuity, duplicates, OHLC, volume, coverage checks.
+Models:
 
-Feature layer:
+- Naive realized volatility baseline
+- EWMA volatility baseline
+- GARCH(1,1)-Student-t
 
-- `cmva/features/returns.py`: close matrix, log returns, equal-weight basket return.
-- `cmva/features/volatility.py`: realized and EWMA volatility.
-- `cmva/features/correlation.py`: rolling average pairwise correlation.
-- `cmva/features/rolling_beta.py`: rolling BTC beta.
-- `cmva/features/pca.py`: rolling covariance PCA1 share.
-- `cmva/features/dispersion.py`: cross-sectional dispersion.
+Forecast definition:
 
-Model and diagnostics layer:
+- Forecast means next-period volatility or variance, not price direction.
+- If interval is `15m` and horizon is `1 bar`, the forecast means next 15m volatility.
+- If interval is `1h` and horizon is `1 bar`, the forecast means next 1h volatility.
 
-- `cmva/models/garch.py`: GARCH(1,1) Student-t with EWMA fallback.
-- `cmva/models/diagnostics.py`: Ljung-Box, ARCH-LM, forecast loss, DM, Mincer-Zarnowitz, Kupiec, HAC, bootstrap diagnostics.
-- `cmva/models/selection.py`: model selection status, currently GARCH only.
-- `cmva/forecast/volatility_forecaster.py`: asset and basket forecast service.
+Backtesting definition:
 
-Regime and policy layer:
+- Backtesting means model validation, not trading strategy PnL.
+- Do not compute strategy returns.
+- Do not compute portfolio weights.
+- Do not compute target exposure.
+- Do not compute paper PnL.
+- Validate whether volatility forecasts, trend classifications, shock labels, and regime labels explain subsequent market behavior.
 
-- `cmva/regime/shock.py`: `NORMAL`, `MODERATE_SHOCK`, `IDIOSYNCRATIC_VOL_SHOCK`, `SYSTEMIC_VOL_SHOCK`, `VOL_REGIME_BUILDUP`.
-- `cmva/regime/classifier.py`: market regime classifier.
-- `cmva/regime/thresholds.py`: rolling/expanding thresholds.
-- `cmva/policy/vol_target.py`: naive volatility target exposure.
-- `cmva/policy/regime_vol_target.py`: regime-aware exposure multiplier policy.
+Validation metrics:
 
-Backtest layer:
+- RMSE
+- MAE
+- QLIKE
+- forecast-realized volatility correlation
+- calibration by forecast decile
+- realized volatility by regime
+- post-shock realized volatility path
+- residual autocorrelation diagnostics
+- model comparison against EWMA and naive baselines
 
-- `cmva/backtest/engine.py`: historical walk-forward backtest.
-- `cmva/backtest/live_paper.py`: live paper settlement timing.
-- `cmva/backtest/benchmarks.py`: BTC and equal-weight benchmarks.
-- `cmva/backtest/costs.py`: turnover and cost helpers.
-- `cmva/backtest/metrics.py`: performance metrics and drawdown.
+Diagnostic results must include null hypothesis, formula, statistic, p-value when applicable, decision, sample size, interpretation, and limitations. Never present p-values as investment proof.
 
-TUI layer:
+## C++ Acceleration
 
-- `cmva/tui/app.py`: Textual app composition, settings form, buttons, refresh loop.
-- `cmva/tui/screens.py`: tab render dispatch.
-- `cmva/tui/widgets.py`: dashboard, methodology, diagnostics, backtest, process renderables.
-- `cmva/tui/graphs.py`: terminal-native time-series graph panels.
-- `cmva/tui/bindings.py`: keyboard shortcuts.
-- `cmva/tui/theme.py`: TUI CSS.
+- Use Python for orchestration, web server, I/O, charts, settings, and UI state.
+- Use C++ for computational kernels when profiling shows a bottleneck.
+- Use pybind11 and scikit-build-core.
+- Provide Python fallback implementation.
+- C++ and Python results must match within numerical tolerance.
+- Initial C++ candidates: log returns, rolling mean/std, EWMA variance, realized volatility, rolling covariance/correlation, rolling OLS slope/t-stat, forecast loss metrics.
 
-Report layer:
+## UI Contract
 
-- `cmva/reports/markdown.py`: Markdown report with methodology, diagnostics, process, range policy.
-- `cmva/reports/html.py`: HTML report derived from the Markdown content.
-- `cmva/reports/plots.py`: simple SVG equity export.
+Use FastAPI + Jinja2 templates + vanilla JavaScript. Browser WebSocket can push live dashboard updates. The Textual TUI is not the primary UX.
 
-Tests:
-
-- Tests must not require internet.
-- Use synthetic candles and mocked data.
-- Keep `pytest` green after every behavior change.
-
-## 5. TUI Tabs And UX Contract
-
-Tabs:
+Pages:
 
 ```text
-Dashboard | Data | Features | Models | Methodology | Stat Tests | Regime | Backtest | Process | Settings | Logs
+Dashboard
+Markets
+Volatility
+Trend
+Correlation / PCA
+Shock & Regime
+Models
+Backtest / Validation
+Methodology
+Settings
+Logs
 ```
 
-Dashboard must show:
+Tooltip requirement:
 
-- latest closed candle
-- WebSocket status
-- current regime and shock
-- forecast vol 1h
-- target exposure
-- live paper PnL
-- data interval, forecast horizon, dashboard range, forecast range, backtest range
-- graph panels for basket return, forecast volatility, target exposure, and shock/regime score
+- Implement tooltip components across the UI.
+- A tooltip appears on mouse hover and keyboard focus.
+- Use tooltips for nontrivial metrics, models, diagnostics, buttons, and chart legends.
+- Manage tooltip content through `cmva/web/glossary.yaml`.
+- Each tooltip should include a short explanation and, when useful, a formula.
+- Link detailed explanations to the Methodology page.
+- Do not hide essential information only inside tooltips.
 
-Methodology must show:
+## Tests
 
-- formulas for log return, rolling volatility, EWMA, correlation, beta, covariance PCA1, GARCH, shock score, exposure, backtest return
-- Range Policy explaining interval, forecast horizon, display ranges, and evaluation ranges
-- look-ahead discipline
-- process steps
+Tests must run offline with synthetic data.
 
-Stat Tests must show:
+Required coverage:
 
-- active forecast diagnostic range start/end/sample count
-- model diagnostics
-- forecast evaluation
-- risk coverage
-- backtest inference
-- regime/shock validation
-
-Backtest must show:
-
-- selected backtest range start/end/sample count
-- cumulative return, max drawdown, Sharpe, turnover
-- equity curve graph
-- drawdown graph
-- strategy vs benchmark return graph
-
-Settings must be scrollable and expose:
-
-- symbols
-- rolling windows
-- target annual vol and max leverage
-- transaction cost and slippage
-- GARCH refit frequency and shock thresholds
-- dashboard, forecast, and backtest ranges as three comma-separated values
-
-Logs must be scrollable and must be the user-facing place for runtime messages. `httpx` and WebSocket library logs should not print over the TUI.
-
-Keyboard bindings:
-
-```text
-left/right  tab navigation
-space       pause/resume
-r           refresh
-f           force GARCH refit
-b           rerun backtest
-e           export report
-q           quit
-```
-
-## 6. Statistical Methodology Contract
-
-Use percent returns internally for GARCH numerical stability, then convert forecasts back to decimal volatility.
-
-GARCH:
-
-```text
-r_t = mu + eps_t
-eps_t = sigma_t z_t
-h_t = omega + alpha eps_{t-1}^2 + beta h_{t-1}
-forecast = sigma_{t+1|t}
-```
-
-Shock score:
-
-```text
-shock_score_t = |r_t| / sigma_{t|t-1}
-```
-
-Target exposure:
-
-```text
-base_exposure_t = target_vol_per_hour / forecast_vol_{t+1|t}
-target_exposure_t = clip(base_exposure_t * regime_multiplier, 0, max_leverage)
-```
-
-Backtest return:
-
-```text
-R_{t+1} = w_t r_{t+1} - cost * |w_t - w_{t-1}|
-```
-
-Regime multipliers:
-
-```text
-SYSTEMIC_RISK           0.20
-IDIOSYNCRATIC_HIGH_VOL  0.50
-ASSET_SPECIFIC          1.00
-QUIET_CORRELATED        0.70
-```
-
-Diagnostic results must include:
-
-- null hypothesis
-- formula
-- statistic
-- p-value when applicable
-- decision
-- sample size
-- interpretation
-- limitations
-
-Never present p-values as investment proof. They are diagnostics only.
-
-## 7. Artifacts And Git Hygiene
-
-Generated artifacts live under:
-
-```text
-data/raw
-data/cleaned
-data/features
-data/models
-data/backtests
-reports
-logs
-```
-
-Generated data, reports, logs, and caches should remain gitignored.
-
-Do not revert user changes unless explicitly requested. If the worktree is dirty, inspect first and preserve unrelated changes.
-
-## 8. Acceptance Criteria
-
-CMVA is acceptable when:
-
-1. `python3 -m cmva --help` works.
-2. `python -m cmva`, `.venv/bin/python -m cmva`, or `./run_cmva.sh` opens the TUI.
-3. The app fetches/stores Binance Spot public 1h closed candles.
-4. Current unclosed candles can be displayed but are excluded from research calculations.
-5. Dashboard, Methodology, Stat Tests, Backtest, Process, Settings, and Logs tabs render useful content.
-6. Dashboard/Forecast/Backtest ranges can be changed independently.
-7. Backtest metrics are recomputed for the selected backtest range.
-8. Statistical diagnostics handle insufficient samples gracefully.
-9. Reports include methodology, diagnostics, range policy, limitations, and no-trading disclaimers.
-10. All tests pass offline.
-
+- selected interval propagates to REST and WebSocket clients
+- duration windows convert correctly to bar windows
+- unclosed candles are excluded from analysis
+- duplicate timestamps are detected
+- invalid OHLC candles are rejected
+- rolling features do not use future data
+- volatility forecasts are shifted correctly
+- walk-forward validation does not use full-sample thresholds
+- Python numerical backend behavior is tested; C++ kernels must match Python reference outputs when added
+- tooltip glossary keys exist for nontrivial UI metrics
+- web routes load successfully
+- data accumulation UI state is exposed

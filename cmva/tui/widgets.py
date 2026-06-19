@@ -11,8 +11,7 @@ from rich.text import Text
 
 from cmva.analysis_types import DiagnosticSnapshot, MethodStep, StatTestResult
 from cmva.app import CMVAApplication
-from cmva.policy.regime_vol_target import RegimeVolTargetPolicy
-from cmva.tui.graphs import drawdown_frame, multi_series_panels, time_series_panel
+from cmva.tui.graphs import multi_series_panels, time_series_panel
 
 
 def key_value_table(title: str, values: dict[str, object]) -> Table:
@@ -40,11 +39,10 @@ def dashboard_table(app: CMVAApplication) -> Group:
             "WebSocket": app.state.websocket_status,
             "Current regime": app.state.current_regime,
             "Shock status": app.state.current_shock_type,
-            "Basket forecast vol 1h": _percent(app.state.forecast_vol_1h),
-            "Target exposure next hour": _multiple(app.state.target_exposure),
-            "Historical cumulative return": _percent(app.state.backtest_summary.get("backtest_cumulative_return")),
-            "Historical max drawdown": _percent(app.state.backtest_summary.get("backtest_max_drawdown")),
-            "Live paper PnL": _percent(app.state.live_paper_pnl),
+            "Forecast volatility": _percent(app.state.forecast_vol),
+            "Best QLIKE model": app.state.backtest_summary.get("best_qlike_model"),
+            "GARCH QLIKE": _format_value(app.state.backtest_summary.get("garch_qlike")),
+            "EWMA QLIKE": _format_value(app.state.backtest_summary.get("ewma_qlike")),
         },
     )
     status = Panel(
@@ -60,9 +58,8 @@ def dashboard_table(app: CMVAApplication) -> Group:
         features = app.snapshot.features.features
         trend_panels.append(time_series_panel(features["basket_return"], "Basket Return", dashboard_range, unit="%"))
         trend_panels.append(time_series_panel(app.snapshot.historical_forecast, "Forecast Volatility", dashboard_range, unit="%"))
-        policy = RegimeVolTargetPolicy(app.config.target_vol_per_period, app.config.max_leverage)
-        exposure = policy.exposure_series(app.snapshot.historical_forecast, app.snapshot.regimes)
-        trend_panels.append(time_series_panel(exposure, "Target Exposure", dashboard_range, unit="x"))
+        if "trend_strength" in features:
+            trend_panels.append(time_series_panel(features["trend_strength"], "Trend Strength", dashboard_range))
         if not app.snapshot.shocks.empty and "shock_score" in app.snapshot.shocks:
             trend_panels.append(time_series_panel(app.snapshot.shocks["shock_score"], "Shock / Regime Score", dashboard_range))
     else:
@@ -86,11 +83,11 @@ def methodology_panel(app: CMVAApplication) -> Group:
     formula_table.add_row("Avg corr", "mean(pairwise rolling corr)", _format_value(latest.get("avg_pairwise_corr")), str(cutoff or "-"))
     formula_table.add_row("BTC beta", "cov(r_i, r_BTC) / var(r_BTC)", _format_value(latest.get("avg_btc_beta")), str(cutoff or "-"))
     formula_table.add_row("PCA1 share", "max eigenvalue(cov) / sum eigenvalues(cov)", _format_value(latest.get("pca1_share")), str(cutoff or "-"))
-    formula_table.add_row("GARCH", "r_t = mu + eps_t; h_t = omega + alpha eps^2 + beta h", _percent(app.state.forecast_vol_1h), str(cutoff or "-"))
+    formula_table.add_row("GARCH", "r_t = mu + eps_t; h_t = omega + alpha eps^2 + beta h", _percent(app.state.forecast_vol), str(cutoff or "-"))
     formula_table.add_row("Shock", "|r_t| / sigma_{t|t-1}", app.state.current_shock_type or "-", str(cutoff or "-"))
     formula_table.add_row("Regime", "expanding thresholds through t only", app.state.current_regime or "-", str(cutoff or "-"))
-    formula_table.add_row("Exposure", "clip(target_vol / sigma * multiplier, 0, max_leverage)", _multiple(app.state.target_exposure), str(cutoff or "-"))
-    formula_table.add_row("Backtest", "R_{t+1} = w_t r_{t+1} - c |w_t - w_{t-1}|", "shifted", str(cutoff or "-"))
+    formula_table.add_row("Trend", "rolling OLS slope of log price", _format_value(latest.get("trend_slope")), str(cutoff or "-"))
+    formula_table.add_row("Validation", "loss(r_t^2, forecast_{t|t-1}^2)", "walk-forward", str(cutoff or "-"))
     range_policy = key_value_table(
         "Range Policy",
         {
@@ -99,13 +96,14 @@ def methodology_panel(app: CMVAApplication) -> Group:
             "dashboard_time_range": app.config.dashboard_time_range.upper(),
             "forecast_time_range": app.config.forecast_time_range.upper(),
             "backtest_time_range": app.config.backtest_time_range.upper(),
-            "range_meaning": "display/evaluation window; forecast horizon remains 1h",
+            "range_meaning": "display/evaluation windows; forecast horizon is bar-based",
+            "window_bar_counts": app.config.window_bar_counts,
         },
     )
 
     steps = process_table(app.state.latest_diagnostics.method_steps[-20:] or app.state.process_timeline[-20:])
     note = Panel(
-        "All formulas use closed-candle data only. Forecast, shock, and backtest rows explicitly use shifted signals where required.",
+        "All formulas use closed-candle data only. Forecast, shock, and model-validation rows use shifted forecasts where required.",
         title="Look-ahead discipline",
         expand=True,
     )
@@ -129,47 +127,25 @@ def diagnostics_panel(snapshot: DiagnosticSnapshot, range_status: dict[str, obje
         _test_table("Model Diagnostics", snapshot.model_tests),
         _test_table("Forecast Evaluation", snapshot.forecast_tests),
         _test_table("Risk Coverage", snapshot.risk_tests),
-        _test_table("Backtest Inference", snapshot.backtest_tests),
+        _test_table("Model Validation", snapshot.backtest_tests),
         _test_table("Regime / Shock Validation", snapshot.regime_tests),
     )
 
 
 def backtest_panel(app: CMVAApplication) -> Group:
     values = dict(app.state.backtest_summary)
-    if app.range_backtest is not None:
-        values["average_exposure_by_regime"] = app.range_backtest.average_exposure_by_regime
-        values["return_by_regime"] = app.range_backtest.return_by_regime
-    summary = key_value_table("Backtest", values or {"status": "no backtest"})
+    if app.range_model_validation is not None and not app.range_model_validation.realized_vol_by_regime.empty:
+        values["realized_vol_by_regime"] = app.range_model_validation.realized_vol_by_regime.to_dict()
+    summary = key_value_table("Backtest / Validation", values or {"status": "no validation"})
     panels = [summary]
-    if app.range_backtest is not None:
+    if app.range_model_validation is not None and not app.range_model_validation.losses.empty:
         range_label = app.config.backtest_time_range
-        equity = app.range_backtest.equity
-        returns = app.range_backtest.returns
-        drawdown = drawdown_frame(equity)
         panels.append(
             multi_series_panels(
-                equity,
-                "Equity Curve",
+                app.range_model_validation.losses,
+                "QLIKE Forecast Loss",
                 range_label,
-                columns=["regime_aware_vol_target", "btc_buy_hold", "equal_weight_buy_hold"],
-            )
-        )
-        panels.append(
-            multi_series_panels(
-                drawdown,
-                "Drawdown",
-                range_label,
-                columns=["regime_aware_vol_target"],
-                unit="%",
-            )
-        )
-        panels.append(
-            multi_series_panels(
-                returns,
-                "Hourly Return",
-                range_label,
-                columns=["regime_aware_vol_target", "btc_buy_hold", "equal_weight_buy_hold"],
-                unit="%",
+                columns=["garch_qlike", "ewma_qlike", "naive_qlike"],
             )
         )
     return Group(*panels)
@@ -215,15 +191,6 @@ def _percent(value: object) -> str:
         return "-"
     try:
         return f"{float(value) * 100:.2f}%"
-    except (TypeError, ValueError):
-        return str(value)
-
-
-def _multiple(value: object) -> str:
-    if value is None:
-        return "-"
-    try:
-        return f"{float(value):.2f}x"
     except (TypeError, ValueError):
         return str(value)
 

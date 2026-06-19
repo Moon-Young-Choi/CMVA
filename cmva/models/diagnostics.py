@@ -30,7 +30,7 @@ def run_statistical_diagnostics(
     ewma_vol: pd.Series,
     regimes: pd.Series,
     shocks: pd.DataFrame,
-    backtest_returns: pd.DataFrame | None,
+    validation_losses: pd.DataFrame | None,
     garch_params: dict[str, float] | None = None,
     generated_at: pd.Timestamp | None = None,
     periods_per_year: int = 365 * 24,
@@ -82,7 +82,7 @@ def run_statistical_diagnostics(
         risk_tests=[
             _kupiec_var_test(returns, forecast, alpha=0.05),
         ],
-        backtest_tests=_backtest_tests(backtest_returns, periods_per_year, alpha),
+        backtest_tests=_validation_tests(validation_losses, alpha),
         regime_tests=_regime_tests(regimes, shocks, timestamp),
         generated_at=timestamp,
     )
@@ -93,8 +93,6 @@ def build_method_steps(
     forecast_vol: pd.Series,
     regimes: pd.Series,
     shocks: pd.DataFrame,
-    target_exposure: float | None,
-    backtest_returns: pd.DataFrame | None,
 ) -> list[MethodStep]:
     if features.empty:
         return []
@@ -156,26 +154,14 @@ def build_method_steps(
         ),
         MethodStep(
             timestamp=latest,
-            stage="Exposure decision",
-            formula_id="clip(target_vol / sigma_{t+1|t} * multiplier, 0, max_leverage)",
-            inputs={"decision_time": latest},
-            output=target_exposure,
+            stage="Walk-forward validation",
+            formula_id="L_t = loss(r_t^2, forecast_{t|t-1}^2)",
+            inputs={"forecast_alignment": "previous closed forecast"},
+            output="model forecast loss updated",
             data_cutoff=latest,
             lookahead_status="passed",
         ),
     ]
-    if backtest_returns is not None and "regime_aware_vol_target" in backtest_returns:
-        steps.append(
-            MethodStep(
-                timestamp=latest,
-                stage="Backtest accounting",
-                formula_id="R_{t+1} = w_t r_{t+1} - c |w_t - w_{t-1}|",
-                inputs={"signal_shift": "one closed candle"},
-                output=_safe_float(backtest_returns["regime_aware_vol_target"].iloc[-1]),
-                data_cutoff=latest,
-                lookahead_status="passed",
-            )
-        )
     return steps
 
 
@@ -466,44 +452,39 @@ def _kupiec_var_test(returns: pd.Series, forecast_vol: pd.Series, alpha: float =
     )
 
 
-def _backtest_tests(
-    backtest_returns: pd.DataFrame | None,
-    periods_per_year: int,
-    alpha: float,
-) -> list[StatTestResult]:
-    if backtest_returns is None or backtest_returns.empty or "regime_aware_vol_target" not in backtest_returns:
+def _validation_tests(validation_losses: pd.DataFrame | None, alpha: float) -> list[StatTestResult]:
+    if validation_losses is None or validation_losses.empty:
         return [
-            _insufficient("Backtest HAC mean return", "mean hourly return = 0", "t = mean / HAC_se", 0, 20),
+            _insufficient("Walk-forward QLIKE comparison", "equal forecast loss", "DM = mean(d_t) / HAC_se(d_t)", 0, 20),
         ]
-    strategy = _clean_series(backtest_returns["regime_aware_vol_target"])
-    tests = [_hac_result("Backtest HAC mean return", strategy, "mean hourly return = 0", alpha)]
-    benchmark_column = "equal_weight_buy_hold"
-    if benchmark_column not in backtest_returns and "equal_weight_buy_and_hold" in backtest_returns:
-        benchmark_column = "equal_weight_buy_and_hold"
-    if benchmark_column in backtest_returns:
-        diff = strategy - _clean_series(backtest_returns[benchmark_column]).reindex(strategy.index)
-        tests.append(_hac_result("Strategy vs equal-weight HAC difference", diff.dropna(), "mean return difference = 0", alpha))
-    tests.extend(_bootstrap_results(strategy, periods_per_year))
+    tests: list[StatTestResult] = []
+    comparisons = [
+        ("GARCH vs EWMA QLIKE", "garch_qlike", "ewma_qlike"),
+        ("GARCH vs naive realized-vol QLIKE", "garch_qlike", "naive_qlike"),
+    ]
+    for name, model_column, baseline_column in comparisons:
+        if model_column not in validation_losses or baseline_column not in validation_losses:
+            tests.append(_insufficient(name, "equal forecast loss", "DM = mean(d_t) / HAC_se(d_t)", 0, 20))
+            continue
+        diff = _clean_series(validation_losses[model_column] - validation_losses[baseline_column])
+        if len(diff) < 20:
+            tests.append(_insufficient(name, "equal forecast loss", "DM = mean(d_t) / HAC_se(d_t)", len(diff), 20))
+            continue
+        statistic, p_value = _hac_mean_test(diff)
+        tests.append(
+            StatTestResult(
+                name=name,
+                null_hypothesis="equal predictive accuracy",
+                formula="DM = mean(L_model - L_baseline) / HAC_se",
+                statistic=statistic,
+                p_value=p_value,
+                decision=_decision_from_pvalue(p_value, alpha, reject_bad=False),
+                sample_size=len(diff),
+                interpretation="Negative mean loss difference favors GARCH under QLIKE loss.",
+                limitations="This validates volatility forecasts, not trading profitability.",
+            )
+        )
     return tests
-
-
-def _hac_result(name: str, series: pd.Series, null: str, alpha: float) -> StatTestResult:
-    clean = _clean_series(series)
-    minimum = 20
-    if len(clean) < minimum:
-        return _insufficient(name, null, "t = mean(x_t) / HAC_se", len(clean), minimum)
-    statistic, p_value = _hac_mean_test(clean)
-    return StatTestResult(
-        name=name,
-        null_hypothesis=null,
-        formula="t = mean(x_t) / HAC_se",
-        statistic=statistic,
-        p_value=p_value,
-        decision=_decision_from_pvalue(p_value, alpha, reject_bad=False),
-        sample_size=len(clean),
-        interpretation="Uses Newey-West style HAC standard error for serial dependence.",
-        limitations="Hourly returns can be heavy-tailed; read with bootstrap intervals.",
-    )
 
 
 def _hac_mean_test(series: pd.Series) -> tuple[float, float]:
@@ -527,72 +508,6 @@ def _hac_mean_test(series: pd.Series) -> tuple[float, float]:
     statistic = float(clean.mean() / se)
     p_value = float(2.0 * stats.norm.sf(abs(statistic)))
     return statistic, p_value
-
-
-def _bootstrap_results(strategy: pd.Series, periods_per_year: int) -> list[StatTestResult]:
-    clean = _clean_series(strategy)
-    minimum = 30
-    if len(clean) < minimum:
-        return [
-            _insufficient("Bootstrap Sharpe CI", "diagnostic interval", "stationary block bootstrap", len(clean), minimum),
-            _insufficient("Bootstrap cumulative return CI", "diagnostic interval", "stationary block bootstrap", len(clean), minimum),
-        ]
-    samples = _block_bootstrap(clean.to_numpy(), draws=200, seed=42)
-    sharpe_values = np.array([_sample_sharpe(sample, periods_per_year) for sample in samples])
-    cumulative_values = np.array([float(np.prod(1.0 + sample) - 1.0) for sample in samples])
-    sharpe_ci = np.nanpercentile(sharpe_values, [2.5, 97.5])
-    cumulative_ci = np.nanpercentile(cumulative_values, [2.5, 97.5])
-    return [
-        StatTestResult(
-            name="Bootstrap Sharpe CI",
-            null_hypothesis="diagnostic interval",
-            formula="stationary block bootstrap, seed=42",
-            statistic=_sample_sharpe(clean.to_numpy(), periods_per_year),
-            p_value=None,
-            decision="diagnostic only",
-            sample_size=len(clean),
-            interpretation=f"95% CI [{sharpe_ci[0]:.4f}, {sharpe_ci[1]:.4f}]",
-            limitations="Bootstrap intervals depend on block length and sample representativeness.",
-        ),
-        StatTestResult(
-            name="Bootstrap cumulative return CI",
-            null_hypothesis="diagnostic interval",
-            formula="stationary block bootstrap, seed=42",
-            statistic=float((1.0 + clean).prod() - 1.0),
-            p_value=None,
-            decision="diagnostic only",
-            sample_size=len(clean),
-            interpretation=f"95% CI [{cumulative_ci[0]:.4f}, {cumulative_ci[1]:.4f}]",
-            limitations="Path-dependent drawdowns are not fully summarized by this interval.",
-        ),
-    ]
-
-
-def _block_bootstrap(values: np.ndarray, draws: int, seed: int) -> list[np.ndarray]:
-    rng = np.random.default_rng(seed)
-    n = len(values)
-    block = max(2, int(math.sqrt(n)))
-    samples = []
-    for _ in range(draws):
-        pieces = []
-        while sum(len(piece) for piece in pieces) < n:
-            start = int(rng.integers(0, n))
-            idx = (np.arange(start, start + block) % n).astype(int)
-            pieces.append(values[idx])
-        samples.append(np.concatenate(pieces)[:n])
-    return samples
-
-
-def _sample_sharpe(values: np.ndarray, periods_per_year: int) -> float:
-    if len(values) == 0:
-        return 0.0
-    vol = float(np.std(values, ddof=0) * math.sqrt(periods_per_year))
-    if vol <= 0:
-        return 0.0
-    cumulative = float(np.prod(1.0 + values) - 1.0)
-    years = max(len(values) / periods_per_year, 1 / periods_per_year)
-    annualized = float((1.0 + cumulative) ** (1.0 / years) - 1.0) if cumulative > -1.0 else -1.0
-    return annualized / vol
 
 
 def _regime_tests(regimes: pd.Series, shocks: pd.DataFrame, timestamp: pd.Timestamp | None) -> list[StatTestResult]:

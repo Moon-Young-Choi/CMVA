@@ -10,7 +10,6 @@ from textual.widgets import Input
 
 from cmva.app import CMVAApplication
 from cmva.config import CMVAConfig
-from cmva.reports.markdown import build_markdown_report
 from cmva.time_ranges import parse_time_range, slice_by_time_range
 from cmva.tui.app import CMVATuiApp, _parse_ranges
 from cmva.tui.graphs import time_series_panel
@@ -76,15 +75,15 @@ def test_graph_renderer_handles_common_series_shapes():
 def test_default_range_config_values():
     config = CMVAConfig()
 
-    assert config.interval == "1h"
-    assert config.forecast_horizon == "1h"
+    assert config.interval == "15m"
+    assert config.forecast_horizon == "1 bar = next 15 minutes"
     assert config.dashboard_time_range == "1d"
     assert config.forecast_time_range == "1w"
     assert config.backtest_time_range == "1y"
 
 
 def test_range_settings_change_backtest_sample_size(tmp_path, synthetic_candles):
-    app = CMVAApplication(CMVAConfig(data_dir=tmp_path / "data", reports_dir=tmp_path / "reports"))
+    app = CMVAApplication(CMVAConfig(interval="1h", data_dir=tmp_path / "data"))
     app.recompute(synthetic_candles(periods=240), force_refit=True)
     full_count = app.state.backtest_summary["backtest_observations"]
 
@@ -99,12 +98,12 @@ def test_range_settings_change_backtest_sample_size(tmp_path, synthetic_candles)
 
     assert full_count == 240
     assert app.state.backtest_summary["backtest_observations"] == 24
-    assert app.range_backtest is not None
-    assert len(app.range_backtest.returns) == 24
+    assert app.range_model_validation is not None
+    assert app.range_model_validation.sample_size <= 24
 
 
 def test_forecast_diagnostics_use_selected_forecast_range(tmp_path, synthetic_candles):
-    app = CMVAApplication(CMVAConfig(data_dir=tmp_path / "data", reports_dir=tmp_path / "reports"))
+    app = CMVAApplication(CMVAConfig(interval="1h", data_dir=tmp_path / "data"))
     app.recompute(synthetic_candles(periods=240), force_refit=True)
     app.apply_view_ranges(
         {
@@ -120,7 +119,7 @@ def test_forecast_diagnostics_use_selected_forecast_range(tmp_path, synthetic_ca
 
 
 def test_dashboard_and_backtest_render_range_labels_and_graphs(tmp_path, synthetic_candles):
-    app = CMVAApplication(CMVAConfig(data_dir=tmp_path / "data", reports_dir=tmp_path / "reports"))
+    app = CMVAApplication(CMVAConfig(interval="1h", data_dir=tmp_path / "data"))
     app.recompute(synthetic_candles(periods=240), force_refit=True)
     console = Console(record=True, width=160)
 
@@ -133,13 +132,13 @@ def test_dashboard_and_backtest_render_range_labels_and_graphs(tmp_path, synthet
     console = Console(record=True, width=160)
     console.print(render_backtest(app))
     backtest = console.export_text()
-    assert "Equity Curve" in backtest
-    assert "Drawdown" in backtest
+    assert "Backtest / Validation" in backtest
+    assert "QLIKE Forecast Loss" in backtest
     assert "backtest_observations" in backtest
 
 
 def test_stat_tests_render_active_forecast_range(tmp_path, synthetic_candles):
-    app = CMVAApplication(CMVAConfig(data_dir=tmp_path / "data", reports_dir=tmp_path / "reports"))
+    app = CMVAApplication(CMVAConfig(interval="1h", data_dir=tmp_path / "data"))
     app.recompute(synthetic_candles(periods=240), force_refit=True)
     console = Console(record=True, width=160)
 
@@ -151,7 +150,7 @@ def test_stat_tests_render_active_forecast_range(tmp_path, synthetic_candles):
 
 
 def test_settings_tab_exposes_range_controls(tmp_path):
-    app = CMVATuiApp(CMVAApplication(CMVAConfig(data_dir=tmp_path / "data", reports_dir=tmp_path / "reports")))
+    app = CMVATuiApp(CMVAApplication(CMVAConfig(data_dir=tmp_path / "data")))
 
     async def noop_bootstrap() -> None:
         return None
@@ -172,18 +171,3 @@ def test_range_form_parser_rejects_invalid_values():
     with pytest.raises(ValueError):
         _parse_ranges("1d, soon, all")
 
-
-def test_report_contains_selected_ranges_and_horizon_policy():
-    markdown = build_markdown_report(
-        {
-            "mode": "LIVE",
-            "forecast_horizon": "1h",
-            "dashboard_time_range": "1d",
-            "forecast_time_range": "1w",
-            "backtest_time_range": "1y",
-        }
-    )
-
-    assert "Horizon and range policy" in markdown
-    assert "`forecast_horizon`: 1h" in markdown
-    assert "`backtest_time_range`: 1y" in markdown

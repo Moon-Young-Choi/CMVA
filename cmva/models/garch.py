@@ -15,6 +15,7 @@ from cmva.models.base import FitResult, VolForecast
 class GarchVolatilityModel:
     min_observations: int = 100
     ewma_span: int = 24
+    max_fit_observations: int | None = 5000
 
     name: str = "garch"
 
@@ -24,18 +25,19 @@ class GarchVolatilityModel:
 
     def fit(self, returns: pd.Series) -> FitResult:
         clean = _clean_returns(returns)
-        if len(clean) < self.min_observations:
+        fit_sample = clean.tail(self.max_fit_observations) if self.max_fit_observations else clean
+        if len(fit_sample) < self.min_observations:
             self._result = None
             self._fit_result = FitResult(
                 False,
                 self.name,
-                message=f"not enough observations for GARCH: {len(clean)} < {self.min_observations}",
+                message=f"not enough observations for GARCH: {len(fit_sample)} < {self.min_observations}",
             )
             return self._fit_result
         try:
             from arch import arch_model
 
-            model = arch_model(clean * 100.0, mean="Constant", vol="GARCH", p=1, q=1, dist="StudentsT", rescale=False)
+            model = arch_model(fit_sample * 100.0, mean="Constant", vol="GARCH", p=1, q=1, dist="StudentsT", rescale=False)
             self._result = model.fit(disp="off", show_warning=False)
             params = {str(key): float(value) for key, value in self._result.params.items()}
             self._fit_result = FitResult(
@@ -109,6 +111,8 @@ def historical_garch_forecast(
     refit_frequency: int = 24,
     min_observations: int = 100,
     ewma_span: int = 24,
+    max_fit_observations: int | None = 5000,
+    max_refits: int | None = 12,
 ) -> pd.Series:
     clean = _clean_returns(returns)
     if clean.empty:
@@ -120,9 +124,20 @@ def historical_garch_forecast(
         return fallback.rename("forecast_vol")
 
     forecasts = pd.Series(index=clean.index, dtype=float, name="forecast_vol")
-    model = GarchVolatilityModel(min_observations=min_observations, ewma_span=ewma_span)
+    model = GarchVolatilityModel(
+        min_observations=min_observations,
+        ewma_span=ewma_span,
+        max_fit_observations=max_fit_observations,
+    )
+    start_pos = 0
+    if max_refits is not None and refit_frequency > 0:
+        start_pos = max(0, len(clean) - refit_frequency * max_refits)
+        if start_pos > 0:
+            forecasts.iloc[:start_pos] = fallback.iloc[:start_pos]
     last_refit_pos = -refit_frequency
     for pos, idx in enumerate(clean.index):
+        if pos < start_pos:
+            continue
         history = clean.iloc[: pos + 1]
         if len(history) < min_observations:
             forecasts.loc[idx] = fallback.loc[idx]

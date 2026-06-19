@@ -30,15 +30,20 @@ fi
 
 if ! "$VENV_PY" - <<'PY' >/dev/null 2>&1
 import arch
+import fastapi
 import httpx
+import jinja2
 import numpy
 import pandas
 import pyarrow
+import multipart
 import scipy
 import sklearn
 import statsmodels
 import textual
+import uvicorn
 import websockets
+import yaml
 PY
 then
   echo "[CMVA] Installing project dependencies"

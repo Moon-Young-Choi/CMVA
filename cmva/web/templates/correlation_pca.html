@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Correlation PCA{% endblock %}
+{% block heading %}Correlation / PCA{% endblock %}
+{% block content %}
+<section class="grid metrics">
+  {{ ui.metric_card("Average Pairwise Correlation", snapshot.latest_features.avg_pairwise_corr, "average_correlation") }}
+  {{ ui.metric_card("Average BTC Beta", snapshot.latest_features.avg_btc_beta, "rolling_beta") }}
+  {{ ui.metric_card("PCA1 Share", snapshot.latest_features.pca1_share, "pca1_share") }}
+  {{ ui.metric_card("Dispersion", snapshot.latest_features.dispersion, "dispersion") }}
+</section>
+<section class="panel">
+  <h2>Common-Risk Timelines</h2>
+  <div class="chart-grid">
+    <canvas class="line-chart" data-series="avg_pairwise_corr"></canvas>
+    <canvas class="line-chart" data-series="pca1_share"></canvas>
+    <canvas class="line-chart" data-series="dispersion"></canvas>
+    <canvas class="line-chart" data-series="avg_btc_beta"></canvas>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>window.CMVA_SNAPSHOT = {{ snapshot | tojson }}; window.renderCmvaCharts(window.CMVA_SNAPSHOT);</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Settings{% endblock %}
+{% block heading %}Settings{% endblock %}
+{% block content %}
+<section class="panel">
+  <form method="post" action="/settings" class="settings-form">
+    <label>Symbols <input name="symbols" value="{{ cmva.config.symbols | join(', ') }}"></label>
+    <label>{{ ui.help_label("Primary Interval", "closed_candle") }} <input name="interval" value="{{ cmva.config.interval }}"></label>
+    <label>{{ ui.help_label("Forecast Horizon Bars", "garch_forecast") }} <input name="forecast_horizon_bars" type="number" min="1" value="{{ cmva.config.forecast_horizon_bars }}"></label>
+    <label>{{ ui.help_label("Volatility Window", "realized_volatility") }} <input name="volatility_window" value="{{ cmva.config.volatility_window }}"></label>
+    <label>{{ ui.help_label("Correlation Window", "average_correlation") }} <input name="correlation_window" value="{{ cmva.config.correlation_window }}"></label>
+    <label>{{ ui.help_label("PCA Window", "pca1_share") }} <input name="pca_window" value="{{ cmva.config.pca_window }}"></label>
+    <label>{{ ui.help_label("Trend Window", "trend_slope") }} <input name="trend_window" value="{{ cmva.config.trend_window }}"></label>
+    <label>Regime Threshold Window <input name="regime_threshold_window" value="{{ cmva.config.regime_threshold_window }}"></label>
+    <label>Dashboard Range <input name="dashboard_time_range" value="{{ cmva.config.dashboard_time_range }}"></label>
+    <label>Forecast Range <input name="forecast_time_range" value="{{ cmva.config.forecast_time_range }}"></label>
+    <label>Backtest / Validation Range <input name="backtest_time_range" value="{{ cmva.config.backtest_time_range }}"></label>
+    <label>GARCH Refit Frequency <input name="garch_refit_frequency" type="number" min="1" value="{{ cmva.config.garch_refit_frequency }}"></label>
+    <label>Severe Shock Threshold <input name="severe_shock_threshold" value="{{ cmva.config.severe_shock_threshold }}"></label>
+    <label>Moderate Shock Threshold <input name="moderate_shock_threshold" value="{{ cmva.config.moderate_shock_threshold }}"></label>
+    <button type="submit">Apply Settings</button>
+  </form>
+</section>
+<section class="panel">
+  <h2>Current Bar Counts</h2>
+  <dl class="kv-list">
+    {% for key, value in cmva.config.window_bar_counts.items() %}
+    <div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>
+    {% endfor %}
+  </dl>
+</section>
+{% endblock %}

@@ -79,20 +79,18 @@ class CMVATuiApp(App):
                 with VerticalScroll(classes="scroll_panel", id="settings_scroll"):
                     yield Label("Symbols", classes="field_label")
                     yield Input(value=", ".join(self.cmva.config.symbols), id="settings_symbols")
-                    yield Label("Rolling windows: short, medium, long", classes="field_label")
+                    yield Label("Primary interval", classes="field_label")
+                    yield Input(value=self.cmva.config.interval, id="settings_interval")
+                    yield Label("Forecast horizon bars", classes="field_label")
+                    yield Input(value=str(self.cmva.config.forecast_horizon_bars), id="settings_horizon")
+                    yield Label("Rolling windows: volatility, correlation, PCA, trend, regime threshold", classes="field_label")
                     yield Input(
-                        value=f"{self.cmva.config.rolling_short_window}, {self.cmva.config.rolling_medium_window}, {self.cmva.config.rolling_long_window}",
+                        value=(
+                            f"{self.cmva.config.volatility_window}, {self.cmva.config.correlation_window}, "
+                            f"{self.cmva.config.pca_window}, {self.cmva.config.trend_window}, "
+                            f"{self.cmva.config.regime_threshold_window}"
+                        ),
                         id="settings_windows",
-                    )
-                    yield Label("Target annual vol, max leverage", classes="field_label")
-                    yield Input(
-                        value=f"{self.cmva.config.target_annual_vol}, {self.cmva.config.max_leverage}",
-                        id="settings_risk",
-                    )
-                    yield Label("Cost bps, slippage bps", classes="field_label")
-                    yield Input(
-                        value=f"{self.cmva.config.transaction_cost_bps}, {self.cmva.config.slippage_bps}",
-                        id="settings_costs",
                     )
                     yield Label("GARCH refit frequency, severe shock, moderate shock", classes="field_label")
                     yield Input(
@@ -100,7 +98,7 @@ class CMVATuiApp(App):
                         id="settings_model",
                     )
                     yield Button("Apply from now", id="settings_apply_now")
-                    yield Button("Recompute historical backtest", id="settings_recompute")
+                    yield Button("Recompute validation", id="settings_recompute")
                     yield Label("Dashboard, forecast, backtest ranges", classes="field_label")
                     yield Input(
                         value=f"{self.cmva.config.dashboard_time_range}, {self.cmva.config.forecast_time_range}, {self.cmva.config.backtest_time_range}",
@@ -108,7 +106,7 @@ class CMVATuiApp(App):
                     )
                     yield Label("Preset ranges: 1d, 1w, 1m, 3m, 6m, 1y, all. Custom examples: 12h, 10d, 4w", classes="field_label")
                     yield Button("Apply view ranges", id="settings_apply_ranges")
-                    yield Button("Recompute backtest range", id="settings_recompute_range")
+                    yield Button("Recompute validation range", id="settings_recompute_range")
                     yield Button("Cancel", id="settings_cancel")
                     yield Static(id="settings_content", classes="panel")
             with TabPane("Logs", id="logs"):
@@ -192,11 +190,6 @@ class CMVATuiApp(App):
         self.cmva.rerun_backtest()
         self.refresh_views()
 
-    def action_export_report(self) -> None:
-        markdown_path, html_path = self.cmva.export_report()
-        self.cmva.state.log(f"Report ready: {markdown_path}, {html_path}")
-        self.refresh_views()
-
     def action_quit(self) -> None:
         self.exit()
 
@@ -247,33 +240,26 @@ class CMVATuiApp(App):
         ]
         if not symbols:
             raise ValueError("at least one symbol is required")
-        short_window, medium_window, long_window = _parse_ints(
+        volatility_window, correlation_window, pca_window, trend_window, regime_threshold_window = _parse_strings(
             self.query_one("#settings_windows", Input).value,
-            3,
-            "rolling windows",
-        )
-        target_annual_vol, max_leverage = _parse_floats(
-            self.query_one("#settings_risk", Input).value,
-            2,
-            "risk settings",
-        )
-        cost_bps, slippage_bps = _parse_floats(
-            self.query_one("#settings_costs", Input).value,
-            2,
-            "cost settings",
+            5,
+            "duration windows",
         )
         refit_frequency, severe_shock, moderate_shock = _parse_mixed_model_settings(
             self.query_one("#settings_model", Input).value
         )
+        horizon_bars = int(self.query_one("#settings_horizon", Input).value)
+        if horizon_bars <= 0:
+            raise ValueError("forecast horizon bars must be positive")
         return {
             "symbols": symbols,
-            "rolling_short_window": short_window,
-            "rolling_medium_window": medium_window,
-            "rolling_long_window": long_window,
-            "target_annual_vol": target_annual_vol,
-            "max_leverage": max_leverage,
-            "transaction_cost_bps": cost_bps,
-            "slippage_bps": slippage_bps,
+            "interval": self.query_one("#settings_interval", Input).value.strip(),
+            "forecast_horizon_bars": horizon_bars,
+            "volatility_window": volatility_window,
+            "correlation_window": correlation_window,
+            "pca_window": pca_window,
+            "trend_window": trend_window,
+            "regime_threshold_window": regime_threshold_window,
             "garch_refit_frequency": refit_frequency,
             "severe_shock_threshold": severe_shock,
             "moderate_shock_threshold": moderate_shock,
@@ -291,14 +277,12 @@ class CMVATuiApp(App):
 
     def _reset_settings_form(self) -> None:
         self.query_one("#settings_symbols", Input).value = ", ".join(self.cmva.config.symbols)
+        self.query_one("#settings_interval", Input).value = self.cmva.config.interval
+        self.query_one("#settings_horizon", Input).value = str(self.cmva.config.forecast_horizon_bars)
         self.query_one("#settings_windows", Input).value = (
-            f"{self.cmva.config.rolling_short_window}, {self.cmva.config.rolling_medium_window}, {self.cmva.config.rolling_long_window}"
-        )
-        self.query_one("#settings_risk", Input).value = (
-            f"{self.cmva.config.target_annual_vol}, {self.cmva.config.max_leverage}"
-        )
-        self.query_one("#settings_costs", Input).value = (
-            f"{self.cmva.config.transaction_cost_bps}, {self.cmva.config.slippage_bps}"
+            f"{self.cmva.config.volatility_window}, {self.cmva.config.correlation_window}, "
+            f"{self.cmva.config.pca_window}, {self.cmva.config.trend_window}, "
+            f"{self.cmva.config.regime_threshold_window}"
         )
         self.query_one("#settings_model", Input).value = (
             f"{self.cmva.config.garch_refit_frequency}, {self.cmva.config.severe_shock_threshold}, {self.cmva.config.moderate_shock_threshold}"
@@ -308,24 +292,11 @@ class CMVATuiApp(App):
         )
 
 
-def _parse_ints(raw: str, expected: int, label: str) -> tuple[int, ...]:
+def _parse_strings(raw: str, expected: int, label: str) -> tuple[str, ...]:
     values = [part.strip() for part in raw.split(",") if part.strip()]
     if len(values) != expected:
         raise ValueError(f"{label} expects {expected} comma-separated values")
-    parsed = tuple(int(value) for value in values)
-    if any(value <= 0 for value in parsed):
-        raise ValueError(f"{label} values must be positive")
-    return parsed
-
-
-def _parse_floats(raw: str, expected: int, label: str) -> tuple[float, ...]:
-    values = [part.strip() for part in raw.split(",") if part.strip()]
-    if len(values) != expected:
-        raise ValueError(f"{label} expects {expected} comma-separated values")
-    parsed = tuple(float(value) for value in values)
-    if any(value < 0 for value in parsed):
-        raise ValueError(f"{label} values must be nonnegative")
-    return parsed
+    return tuple(values)
 
 
 def _parse_mixed_model_settings(raw: str) -> tuple[int, float, float]:

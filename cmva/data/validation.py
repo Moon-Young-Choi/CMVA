@@ -38,18 +38,6 @@ class ValidationReport:
             "symbol_rows": self.symbol_rows,
         }
 
-    def to_markdown(self) -> str:
-        lines = ["# CMVA Data Validation", "", f"Valid: `{self.is_valid}`", ""]
-        if not self.issues:
-            lines.append("No validation issues detected.")
-            return "\n".join(lines)
-        lines.extend(["| severity | check | symbol | count | message |", "| --- | --- | --- | ---: | --- |"])
-        for issue in self.issues:
-            lines.append(
-                f"| {issue.severity} | {issue.check} | {issue.symbol or ''} | {issue.count} | {issue.message} |"
-            )
-        return "\n".join(lines)
-
 
 def validate_candles(
     frame: pd.DataFrame,
@@ -65,6 +53,17 @@ def validate_candles(
     data = normalize_candle_frame(frame)
     report.symbol_rows = data.groupby("symbol").size().astype(int).to_dict()
     expected_symbols = [symbol.upper() for symbol in symbols] if symbols else sorted(data["symbol"].unique())
+
+    interval_mismatch = data.loc[data["interval"] != interval]
+    if not interval_mismatch.empty:
+        report.issues.append(
+            ValidationIssue(
+                "error",
+                "interval",
+                f"candles must all use selected interval {interval}",
+                count=len(interval_mismatch),
+            )
+        )
 
     unclosed = data.loc[~data["is_closed"]]
     if not unclosed.empty:

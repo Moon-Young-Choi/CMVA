@@ -64,11 +64,12 @@ def render_settings(app: CMVAApplication) -> Table:
             "forecast_time_range": app.config.forecast_time_range,
             "backtest_time_range": app.config.backtest_time_range,
             "allowed_time_ranges": ", ".join(app.config.allowed_time_ranges),
-            "rolling_windows": f"{app.config.rolling_short_window}, {app.config.rolling_medium_window}, {app.config.rolling_long_window}",
-            "target_annual_vol": app.config.target_annual_vol,
-            "max_leverage": app.config.max_leverage,
-            "transaction_cost_bps": app.config.transaction_cost_bps,
-            "slippage_bps": app.config.slippage_bps,
+            "duration_windows": (
+                f"vol={app.config.volatility_window}, corr={app.config.correlation_window}, "
+                f"pca={app.config.pca_window}, trend={app.config.trend_window}, "
+                f"regime={app.config.regime_threshold_window}"
+            ),
+            "window_bar_counts": app.config.window_bar_counts,
             "garch_refit_frequency": app.config.garch_refit_frequency,
         },
     )

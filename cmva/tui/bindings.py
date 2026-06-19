@@ -6,7 +6,6 @@ BINDINGS = [
     ("space", "toggle_pause", "Pause/resume"),
     ("r", "refresh_now", "Refresh"),
     ("f", "force_refit", "Force refit"),
-    ("b", "rerun_backtest", "Backtest"),
-    ("e", "export_report", "Export"),
+    ("b", "rerun_backtest", "Validation"),
     ("q", "quit", "Quit"),
 ]

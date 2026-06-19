@@ -7,15 +7,13 @@ import pytest
 from rich.console import Console
 from textual.containers import VerticalScroll
 
-from cmva.analysis_types import DiagnosticSnapshot, StatTestResult
 from cmva.app import CMVAApplication
-from cmva.backtest.engine import run_historical_backtest
 from cmva.config import CMVAConfig
 from cmva.models.diagnostics import run_statistical_diagnostics
 from cmva.regime.shock import compute_shock_series
-from cmva.reports.markdown import build_markdown_report
 from cmva.tui.app import CMVATuiApp
 from cmva.tui.screens import render_methodology, render_stat_tests
+from cmva.validation import run_walk_forward_validation
 
 
 def test_shock_score_uses_prior_forecast_only():
@@ -30,19 +28,6 @@ def test_shock_score_uses_prior_forecast_only():
     assert shocks["shock_score"].iloc[1] == pytest.approx(2.0)
 
 
-def test_backtest_costs_are_shifted_with_applied_exposure():
-    index = pd.date_range("2026-01-01", periods=3, freq="1h", tz="UTC")
-    returns = pd.DataFrame({"BTCUSDT": [0.0, 0.02, 0.0], "ETHUSDT": [0.0, 0.02, 0.0]}, index=index)
-    forecast = pd.Series([0.001, 0.001, 0.001], index=index)
-    regimes = pd.Series(["ASSET_SPECIFIC"] * 3, index=index)
-
-    result = run_historical_backtest(returns, forecast, regimes, 0.01, 1.0, 50.0, 50.0)
-    strategy = result.returns["regime_aware_vol_target"]
-
-    assert strategy.iloc[0] == pytest.approx(0.0)
-    assert strategy.iloc[1] == pytest.approx(0.01)
-
-
 def test_statistical_diagnostics_are_structured_and_graceful():
     index = pd.date_range("2026-01-01", periods=80, freq="1h", tz="UTC")
     returns = pd.Series([0.001 * ((idx % 5) - 2) for idx in range(80)], index=index)
@@ -50,13 +35,7 @@ def test_statistical_diagnostics_are_structured_and_graceful():
     ewma = pd.Series(0.004, index=index)
     regimes = pd.Series(["QUIET_CORRELATED"] * 80, index=index)
     shocks = pd.DataFrame({"shock_type": ["NORMAL"] * 80}, index=index)
-    backtest_returns = pd.DataFrame(
-        {
-            "regime_aware_vol_target": returns * 0.5,
-            "equal_weight_buy_hold": returns,
-        },
-        index=index,
-    )
+    validation = run_walk_forward_validation(returns, forecast, ewma, forecast, regimes)
 
     diagnostics = run_statistical_diagnostics(
         returns,
@@ -64,7 +43,7 @@ def test_statistical_diagnostics_are_structured_and_graceful():
         ewma,
         regimes,
         shocks,
-        backtest_returns,
+        validation.losses,
         garch_params={"alpha[1]": 0.05, "beta[1]": 0.90, "nu": 8.0},
     )
 
@@ -75,24 +54,24 @@ def test_statistical_diagnostics_are_structured_and_graceful():
     assert all(result.sample_size >= 0 for result in diagnostics.all_tests)
 
 
-def test_bootstrap_diagnostics_are_deterministic():
+def test_validation_diagnostics_are_deterministic():
     index = pd.date_range("2026-01-01", periods=80, freq="1h", tz="UTC")
     returns = pd.Series([0.001, -0.0005, 0.0002, 0.0007] * 20, index=index)
     forecast = pd.Series(0.003, index=index)
     regimes = pd.Series(["ASSET_SPECIFIC"] * 80, index=index)
     shocks = pd.DataFrame({"shock_type": ["NORMAL"] * 80}, index=index)
-    backtest_returns = pd.DataFrame({"regime_aware_vol_target": returns}, index=index)
+    validation = run_walk_forward_validation(returns, forecast, forecast, forecast, regimes)
 
-    first = run_statistical_diagnostics(returns, forecast, forecast, regimes, shocks, backtest_returns)
-    second = run_statistical_diagnostics(returns, forecast, forecast, regimes, shocks, backtest_returns)
-    first_ci = [result.interpretation for result in first.backtest_tests if result.name == "Bootstrap Sharpe CI"][0]
-    second_ci = [result.interpretation for result in second.backtest_tests if result.name == "Bootstrap Sharpe CI"][0]
+    first = run_statistical_diagnostics(returns, forecast, forecast, regimes, shocks, validation.losses)
+    second = run_statistical_diagnostics(returns, forecast, forecast, regimes, shocks, validation.losses)
+    first_stats = [(result.name, result.statistic, result.p_value) for result in first.backtest_tests]
+    second_stats = [(result.name, result.statistic, result.p_value) for result in second.backtest_tests]
 
-    assert first_ci == second_ci
+    assert first_stats == second_stats
 
 
 def test_methodology_and_stat_tabs_render_math_and_pvalues(tmp_path, synthetic_candles):
-    app = CMVAApplication(CMVAConfig(data_dir=tmp_path / "data", reports_dir=tmp_path / "reports"))
+    app = CMVAApplication(CMVAConfig(interval="1h", data_dir=tmp_path / "data"))
     app.recompute(synthetic_candles(periods=80), force_refit=True)
     console = Console(record=True, width=160)
 
@@ -110,7 +89,7 @@ def test_methodology_and_stat_tabs_render_math_and_pvalues(tmp_path, synthetic_c
 
 
 def test_settings_tab_is_wrapped_in_vertical_scroll(tmp_path):
-    app = CMVATuiApp(CMVAApplication(CMVAConfig(data_dir=tmp_path / "data", reports_dir=tmp_path / "reports")))
+    app = CMVATuiApp(CMVAApplication(CMVAConfig(data_dir=tmp_path / "data")))
 
     async def noop_bootstrap() -> None:
         return None
@@ -123,26 +102,3 @@ def test_settings_tab_is_wrapped_in_vertical_scroll(tmp_path):
 
     asyncio.run(run())
 
-
-def test_report_contains_math_diagnostics_and_limitations():
-    diagnostics = DiagnosticSnapshot(
-        model_tests=[
-            StatTestResult(
-                name="Example test",
-                null_hypothesis="no issue",
-                formula="Q = n(n+2) sum",
-                statistic=1.23,
-                p_value=0.45,
-                decision="pass diagnostic",
-                sample_size=100,
-                interpretation="example",
-            )
-        ]
-    )
-
-    markdown = build_markdown_report({"mode": "LIVE"}, diagnostics=diagnostics)
-
-    assert "Mathematical methodology" in markdown
-    assert "Statistical diagnostics" in markdown
-    assert "p_value" in markdown
-    assert "Signals are shifted by one period" in markdown

@@ -18,17 +18,16 @@ class AppState:
     latest_closed_time: pd.Timestamp | None = None
     current_regime: str | None = None
     current_shock_type: str | None = None
-    forecast_vol_1h: float | None = None
-    target_exposure: float | None = None
+    forecast_vol: float | None = None
     backtest_summary: dict[str, float | str | None] = field(default_factory=dict)
     model_status: dict[str, object] = field(default_factory=dict)
     data_status: dict[str, object] = field(default_factory=dict)
+    bootstrap_progress: dict[str, object] = field(default_factory=dict)
     range_status: dict[str, object] = field(default_factory=dict)
     trend_buffers: dict[str, list[float]] = field(default_factory=dict)
     latest_diagnostics: DiagnosticSnapshot = field(default_factory=DiagnosticSnapshot)
     process_timeline: list[MethodStep] = field(default_factory=list)
     last_stat_test_run: pd.Timestamp | None = None
-    live_paper_pnl: float = 0.0
     websocket_status: str = "disconnected"
     paused: bool = False
     logs: list[str] = field(default_factory=list)

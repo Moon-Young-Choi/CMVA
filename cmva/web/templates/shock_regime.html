@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Shock Regime{% endblock %}
+{% block heading %}Shock & Regime{% endblock %}
+{% block content %}
+<section class="grid metrics">
+  {{ ui.metric_card("Shock Label", snapshot.summary.current_shock_type, "shock_score") }}
+  {{ ui.metric_card("Shock Score", snapshot.latest_shock.shock_score, "shock_score") }}
+  {{ ui.metric_card("Shock Breadth", snapshot.latest_shock.shock_breadth, "shock_breadth") }}
+  {{ ui.metric_card("Vol Jump Ratio", snapshot.latest_shock.rv_jump_ratio, "volatility") }}
+  {{ ui.metric_card("Regime", snapshot.summary.current_regime) }}
+</section>
+<section class="panel">
+  <h2>Shock Timelines</h2>
+  <div class="chart-grid">
+    <canvas class="line-chart" data-series="shock_score"></canvas>
+    <canvas class="line-chart" data-series="shock_breadth"></canvas>
+    <canvas class="line-chart" data-series="rv_jump_ratio"></canvas>
+    <canvas class="line-chart" data-series="regime_state"></canvas>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>window.CMVA_SNAPSHOT = {{ snapshot | tojson }}; window.renderCmvaCharts(window.CMVA_SNAPSHOT);</script>
+{% endblock %}

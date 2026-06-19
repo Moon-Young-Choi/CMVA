@@ -57,12 +57,6 @@ def multi_series_panels(
     return Group(*panels)
 
 
-def drawdown_frame(equity: pd.DataFrame) -> pd.DataFrame:
-    if equity.empty:
-        return pd.DataFrame(index=equity.index)
-    return equity / equity.cummax() - 1.0
-
-
 def _sparkline(series: pd.Series, width: int) -> str:
     values = series.to_numpy(dtype=float)
     if len(values) > width:

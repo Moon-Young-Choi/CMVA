@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Volatility{% endblock %}
+{% block heading %}Volatility{% endblock %}
+{% block content %}
+<section class="grid metrics">
+  {{ ui.metric_card("Realized Volatility", snapshot.latest_features.market_vol, "realized_volatility") }}
+  {{ ui.metric_card("EWMA Volatility", snapshot.latest_features.ewma_vol, "ewma") }}
+  {{ ui.metric_card("GARCH Forecast", snapshot.summary.forecast_vol, "garch_forecast") }}
+  {{ ui.metric_card("Range Volatility", snapshot.latest_features.range_vol, "range_volatility") }}
+  {{ ui.metric_card("Vol Percentile", snapshot.latest_features.vol_percentile, "volatility") }}
+  {{ ui.metric_card("Vol Z-score", snapshot.latest_features.vol_z_score, "volatility") }}
+  {{ ui.metric_card("Vol of Vol", snapshot.latest_features.vol_of_vol, "volatility") }}
+  {{ ui.metric_card("Shock Score", snapshot.latest_shock.shock_score, "shock_score") }}
+</section>
+<section class="panel">
+  <h2>Forecast vs Realized Volatility</h2>
+  <div class="chart-grid">
+    <canvas class="line-chart" data-series="forecast_vol"></canvas>
+    <canvas class="line-chart" data-series="market_vol"></canvas>
+    <canvas class="line-chart" data-series="ewma_vol"></canvas>
+    <canvas class="line-chart" data-series="range_vol"></canvas>
+    <canvas class="line-chart" data-series="vol_percentile"></canvas>
+    <canvas class="line-chart" data-series="vol_z_score"></canvas>
+    <canvas class="line-chart" data-series="standardized_residual"></canvas>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>window.CMVA_SNAPSHOT = {{ snapshot | tojson }}; window.renderCmvaCharts(window.CMVA_SNAPSHOT);</script>
+{% endblock %}

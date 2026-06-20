@@ -1,36 +1,36 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Dashboard{% endblock %}
-{% block heading %}Dashboard{% endblock %}
+{% block title %}CMVA 대시보드{% endblock %}
+{% block heading %}대시보드{% endblock %}
 {% block content %}
 <section class="grid metrics">
-  {{ ui.metric_card("Interval", snapshot.summary.interval) }}
-  {{ ui.metric_card("Accumulated Rows", snapshot.data_accumulation.total_rows, "closed_candle") }}
-  {{ ui.metric_card("Forecast Horizon", snapshot.summary.forecast_horizon, "garch_forecast") }}
-  {{ ui.metric_card("Latest Closed Candle", snapshot.summary.latest_closed_time, "closed_candle") }}
-  {{ ui.metric_card("Data Validation", snapshot.summary.validation) }}
-  {{ ui.metric_card("Forecast Volatility", snapshot.summary.forecast_vol, "garch_forecast") }}
-  {{ ui.metric_card("Market Vol", snapshot.latest_features.market_vol, "realized_volatility") }}
-  {{ ui.metric_card("Trend Strength", snapshot.latest_features.trend_strength, "trend_slope") }}
-  {{ ui.metric_card("Average Correlation", snapshot.latest_features.avg_pairwise_corr, "average_correlation") }}
-  {{ ui.metric_card("PCA1 Share", snapshot.latest_features.pca1_share, "pca1_share") }}
-  {{ ui.metric_card("Shock", snapshot.summary.current_shock_type, "shock_score") }}
-  {{ ui.metric_card("Regime", snapshot.summary.current_regime) }}
-  {{ ui.metric_card("Best QLIKE Model", snapshot.validation.best_qlike_model, "qlike") }}
+  {{ ui.metric_card("캔들 간격", snapshot.summary.interval) }}
+  {{ ui.metric_card("누적 행 수", snapshot.data_accumulation.total_rows, "closed_candle") }}
+  {{ ui.metric_card("예측 horizon", snapshot.summary.forecast_horizon, "garch_forecast") }}
+  {{ ui.metric_card("최신 닫힌 캔들", snapshot.summary.latest_closed_time, "closed_candle") }}
+  {{ ui.metric_card("데이터 검증", snapshot.summary.validation) }}
+  {{ ui.metric_card("예측 변동성", snapshot.summary.forecast_vol, "garch_forecast") }}
+  {{ ui.metric_card("시장 변동성", snapshot.latest_features.market_vol, "realized_volatility") }}
+  {{ ui.metric_card("추세 강도", snapshot.latest_features.trend_strength, "trend_slope") }}
+  {{ ui.metric_card("평균 상관", snapshot.latest_features.avg_pairwise_corr, "average_correlation") }}
+  {{ ui.metric_card("PCA1 비중", snapshot.latest_features.pca1_share, "pca1_share") }}
+  {{ ui.metric_card("쇼크", snapshot.summary.current_shock_type, "shock_score") }}
+  {{ ui.metric_card("레짐", snapshot.summary.current_regime) }}
+  {{ ui.metric_card("최저 QLIKE 모델", snapshot.validation.best_qlike_model, "qlike") }}
 </section>
 
 <section class="panel">
-  <h2>Market State Timelines</h2>
+  <h2>시장 상태 타임라인</h2>
   <div class="chart-grid">
-    <canvas class="line-chart" data-series="basket_return" aria-label="Basket return chart"></canvas>
-    <canvas class="line-chart" data-series="forecast_vol" aria-label="Forecast volatility chart"></canvas>
-    <canvas class="line-chart" data-series="market_vol" aria-label="Market volatility chart"></canvas>
-    <canvas class="line-chart" data-series="shock_score" aria-label="Shock score chart"></canvas>
+    <canvas class="line-chart" data-series="basket_return" aria-label="바스켓 수익률 차트"></canvas>
+    <canvas class="line-chart" data-series="forecast_vol" aria-label="예측 변동성 차트"></canvas>
+    <canvas class="line-chart" data-series="market_vol" aria-label="시장 변동성 차트"></canvas>
+    <canvas class="line-chart" data-series="shock_score" aria-label="쇼크 점수 차트"></canvas>
   </div>
 </section>
 
 <section class="panel">
-  <h2>Window Conversion</h2>
+  <h2>구간 변환</h2>
   <dl class="kv-list">
     {% for key, value in snapshot.summary.window_bar_counts.items() %}
     <div><dt>{{ key }}</dt><dd>{{ value }} bars</dd></div>

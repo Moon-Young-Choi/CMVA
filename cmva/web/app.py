@@ -13,7 +13,7 @@ from typing import Any, AsyncIterator
 import pandas as pd
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -22,6 +22,10 @@ from cmva.app import CMVAApplication
 from cmva.engine.interval import bars_for_duration, interval_to_timedelta
 from cmva.models.lab import default_candidate_specs, generate_rolling_origins
 from cmva.native.backend import backend_status
+from cmva.simulation.repository import SimulationRepository
+from cmva.simulation.runner import create_runner_for_app
+from cmva.simulation.snapshot import build_simulation_snapshot
+from cmva.simulation.spec import SimulationSpec
 from cmva.web.glossary import load_glossary
 
 
@@ -34,11 +38,14 @@ def create_web_app(cmva: CMVAApplication | None = None, start_background: bool =
     app = FastAPI(title="CMVA", version="0.1.0", lifespan=_lifespan(cmva_app, start_background))
     app.state.cmva = cmva_app
     app.state.background_threads = []
+    app.state.simulation_repository = SimulationRepository(cmva_app.config.simulations_dir)
+    app.state.simulation_repository.mark_interrupted_runs()
+    app.state.simulation_tasks = {}
     app.mount("/static", StaticFiles(directory=str(PACKAGE_DIR / "static")), name="static")
 
     @app.get("/", response_class=HTMLResponse)
     async def setup_home(request: Request) -> HTMLResponse:
-        return _render(request, "setup.html", page="setup")
+        return _render(request, "simulation_new.html", page="simulation_new")
 
     @app.get("/setup", response_class=HTMLResponse)
     async def setup(request: Request) -> HTMLResponse:
@@ -170,6 +177,75 @@ def create_web_app(cmva: CMVAApplication | None = None, start_background: bool =
     async def logs(request: Request) -> HTMLResponse:
         return _render(request, "logs.html", page="logs")
 
+    @app.get("/simulation/new", response_class=HTMLResponse)
+    async def simulation_new(request: Request) -> HTMLResponse:
+        return _render(request, "simulation_new.html", page="simulation_new")
+
+    @app.get("/simulations", response_class=HTMLResponse)
+    async def simulations(request: Request) -> HTMLResponse:
+        return _render(request, "simulations.html", page="simulations")
+
+    @app.post("/api/simulations")
+    async def create_simulation(request: Request) -> Response:
+        data = await _request_payload(request)
+        try:
+            spec = SimulationSpec.from_mapping(data)
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "errors": [str(exc)]}, status_code=400)
+        repository: SimulationRepository = app.state.simulation_repository
+        run_id = repository.create_run(spec)
+        runner = create_runner_for_app(
+            cmva_app.config,
+            repository,
+            cmva_app.rest_client,
+            cmva_app.storage,
+        )
+        thread = threading.Thread(target=_run_simulation_thread, args=(runner, spec), daemon=True)
+        thread.start()
+        app.state.simulation_tasks[run_id] = thread
+        accepts = request.headers.get("accept", "")
+        if "application/json" in accepts or request.headers.get("content-type", "").startswith("application/json"):
+            return JSONResponse({"ok": True, "run_id": run_id, "redirect_url": f"/simulation/{run_id}"}, status_code=201)
+        return RedirectResponse(f"/simulation/{run_id}", status_code=303)
+
+    @app.get("/simulation/{run_id}", response_class=HTMLResponse)
+    async def simulation_run(request: Request, run_id: str) -> HTMLResponse:
+        snapshot = _load_simulation_or_404(app.state.simulation_repository, run_id)
+        return _render(request, "simulation_run.html", page="simulation_run", simulation=snapshot)
+
+    @app.get("/results/{run_id}", response_class=HTMLResponse)
+    async def simulation_results(request: Request, run_id: str) -> HTMLResponse:
+        repository: SimulationRepository = app.state.simulation_repository
+        try:
+            results = repository.load_final_results(run_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="시뮬레이션 실행을 찾을 수 없습니다.") from exc
+        return _render(request, "results.html", page="simulation_results", simulation=results)
+
+    @app.get("/api/simulations/{run_id}")
+    async def api_simulation(run_id: str) -> JSONResponse:
+        snapshot = _load_simulation_or_404(app.state.simulation_repository, run_id)
+        return JSONResponse(_jsonable(snapshot))
+
+    @app.get("/api/simulations/{run_id}/results")
+    async def api_simulation_results(run_id: str) -> JSONResponse:
+        repository: SimulationRepository = app.state.simulation_repository
+        try:
+            return JSONResponse(_jsonable(repository.load_final_results(run_id)))
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="시뮬레이션 실행을 찾을 수 없습니다.") from exc
+
+    @app.websocket("/ws/simulations/{run_id}")
+    async def simulation_ws(socket: WebSocket, run_id: str) -> None:
+        repository: SimulationRepository = app.state.simulation_repository
+        await socket.accept()
+        try:
+            while True:
+                await socket.send_text(json.dumps(_jsonable(build_simulation_snapshot(repository, run_id))))
+                await asyncio.sleep(1.0)
+        except (WebSocketDisconnect, KeyError):
+            return
+
     @app.get("/api/snapshot")
     async def api_snapshot() -> JSONResponse:
         return JSONResponse(_jsonable(build_snapshot(cmva_app)))
@@ -190,7 +266,7 @@ def create_web_app(cmva: CMVAApplication | None = None, start_background: bool =
         except WebSocketDisconnect:
             return
 
-    def _render(request: Request, template_name: str, page: str) -> HTMLResponse:
+    def _render(request: Request, template_name: str, page: str, **extra: Any) -> HTMLResponse:
         snapshot = _jsonable(build_snapshot(cmva_app))
         return templates.TemplateResponse(
             request,
@@ -201,10 +277,35 @@ def create_web_app(cmva: CMVAApplication | None = None, start_background: bool =
                 "cmva": cmva_app,
                 "snapshot": snapshot,
                 "glossary": load_glossary(),
+                "simulation_runs": app.state.simulation_repository.list_runs(),
+                **extra,
             },
         )
 
     return app
+
+
+async def _request_payload(request: Request) -> dict[str, Any]:
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("application/json"):
+        return dict(await request.json())
+    form = await request.form()
+    payload: dict[str, Any] = dict(form)
+    groups = form.getlist("candidate_model_groups")
+    if groups:
+        payload["candidate_model_groups"] = groups
+    return payload
+
+
+def _load_simulation_or_404(repository: SimulationRepository, run_id: str) -> dict[str, Any]:
+    try:
+        return build_simulation_snapshot(repository, run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="시뮬레이션 실행을 찾을 수 없습니다.") from exc
+
+
+def _run_simulation_thread(runner, spec: SimulationSpec) -> None:
+    asyncio.run(runner.run(spec))
 
 
 def _lifespan(cmva: CMVAApplication, start_background: bool):
@@ -598,6 +699,8 @@ def _jsonable(value: Any) -> Any:
         return [_jsonable(item) for item in value]
     if isinstance(value, tuple):
         return [_jsonable(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return [_jsonable(item) for item in value.tolist()]
     if isinstance(value, pd.Timestamp):
         return value.isoformat()
     if isinstance(value, pd.Interval):

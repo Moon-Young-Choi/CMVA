@@ -26,6 +26,9 @@ def test_glossary_contains_required_tooltip_keys():
         "lookahead_bias",
         "closed_candle",
         "forming_candle",
+        "simulation_t",
+        "simulation_dt",
+        "simulation_s",
         "bootstrap_progress",
         "validation_issue",
     }

@@ -1,58 +1,58 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Markets{% endblock %}
-{% block heading %}Markets{% endblock %}
+{% block title %}CMVA 데이터 품질{% endblock %}
+{% block heading %}데이터 품질{% endblock %}
 {% block content %}
 <section class="grid metrics">
-  {{ ui.metric_card("Accumulated Rows", snapshot.data_accumulation.total_rows, "closed_candle") }}
-  {{ ui.metric_card("Interval", snapshot.data_accumulation.interval) }}
-  {{ ui.metric_card("First Closed Candle", snapshot.data_accumulation.first_open_time, "closed_candle") }}
-  {{ ui.metric_card("Latest Closed Candle", snapshot.data_accumulation.latest_open_time, "closed_candle") }}
-  {{ ui.metric_card("Coverage Hours", snapshot.data_accumulation.coverage_hours, "closed_candle") }}
-  {{ ui.metric_card("Bootstrap Phase", snapshot.bootstrap_progress.phase, "bootstrap_progress") }}
-  {{ ui.metric_card("Fetched Candles", snapshot.bootstrap_progress.fetched_candles, "bootstrap_progress") }}
-  {{ ui.metric_card("Data Quality", snapshot.data_quality.status, "validation_issue") }}
-  {{ ui.metric_card("Validation Issues", snapshot.data_quality.issue_count, "validation_issue") }}
+  {{ ui.metric_card("누적 행 수", snapshot.data_accumulation.total_rows, "closed_candle") }}
+  {{ ui.metric_card("캔들 간격", snapshot.data_accumulation.interval) }}
+  {{ ui.metric_card("첫 닫힌 캔들", snapshot.data_accumulation.first_open_time, "closed_candle") }}
+  {{ ui.metric_card("최신 닫힌 캔들", snapshot.data_accumulation.latest_open_time, "closed_candle") }}
+  {{ ui.metric_card("커버리지 시간", snapshot.data_accumulation.coverage_hours, "closed_candle") }}
+  {{ ui.metric_card("부트스트랩 단계", snapshot.bootstrap_progress.phase, "bootstrap_progress") }}
+  {{ ui.metric_card("수집 캔들 수", snapshot.bootstrap_progress.fetched_candles, "bootstrap_progress") }}
+  {{ ui.metric_card("데이터 품질", snapshot.data_quality.status, "validation_issue") }}
+  {{ ui.metric_card("검증 이슈", snapshot.data_quality.issue_count, "validation_issue") }}
 </section>
 
 <section class="grid metrics">
-  {{ ui.metric_card("Research Dataset", snapshot.data_policy.research_dataset, "closed_candle") }}
-  {{ ui.metric_card("Forming Candle Usage", snapshot.data_policy.forming_candle_usage, "forming_candle") }}
-  {{ ui.metric_card("Current Fetch Symbol", snapshot.bootstrap_progress.current_symbol, "bootstrap_progress") }}
-  {{ ui.metric_card("Bootstrap Updated", snapshot.bootstrap_progress.updated_at, "bootstrap_progress") }}
+  {{ ui.metric_card("연구 데이터셋", snapshot.data_policy.research_dataset, "closed_candle") }}
+  {{ ui.metric_card("형성 중 캔들 사용", snapshot.data_policy.forming_candle_usage, "forming_candle") }}
+  {{ ui.metric_card("현재 수집 심볼", snapshot.bootstrap_progress.current_symbol, "bootstrap_progress") }}
+  {{ ui.metric_card("부트스트랩 갱신", snapshot.bootstrap_progress.updated_at, "bootstrap_progress") }}
 </section>
 
 <section class="panel">
-  <h2>Data To Validation Flow</h2>
+  <h2>데이터-검증 흐름</h2>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Stage</th>
-          <th>Status</th>
-          <th>Evidence</th>
+          <th>단계</th>
+          <th>상태</th>
+          <th>근거</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>Closed Candle Data</td>
+          <td>닫힌 캔들 데이터</td>
           <td>{{ snapshot.data_quality.status }}</td>
-          <td>{{ snapshot.pipeline.data_rows }} accumulated rows across {{ snapshot.data_accumulation.symbols | length }} symbols</td>
+          <td>{{ snapshot.pipeline.data_rows }}개 누적 행 / {{ snapshot.data_accumulation.symbols | length }}개 심볼</td>
         </tr>
         <tr>
-          <td>Feature Matrix</td>
-          <td>{{ "ready" if snapshot.pipeline.feature_rows else "waiting" }}</td>
-          <td>{{ snapshot.pipeline.feature_rows }} feature timestamps</td>
+          <td>특징 행렬</td>
+          <td>{{ "준비됨" if snapshot.pipeline.feature_rows else "대기 중" }}</td>
+          <td>{{ snapshot.pipeline.feature_rows }}개 특징 시각</td>
         </tr>
         <tr>
-          <td>Volatility Model</td>
-          <td>{{ snapshot.pipeline.model or "waiting" }}</td>
-          <td>{{ snapshot.pipeline.forecast_points }} forecast points</td>
+          <td>변동성 모델</td>
+          <td>{{ snapshot.pipeline.model or "대기 중" }}</td>
+          <td>{{ snapshot.pipeline.forecast_points }}개 예측 지점</td>
         </tr>
         <tr>
-          <td>Walk-Forward Validation</td>
-          <td>{{ "ready" if snapshot.pipeline.validation_observations else "waiting" }}</td>
-          <td>{{ snapshot.pipeline.validation_observations }} validation observations</td>
+          <td>워크포워드 검증</td>
+          <td>{{ "준비됨" if snapshot.pipeline.validation_observations else "대기 중" }}</td>
+          <td>{{ snapshot.pipeline.validation_observations }}개 검증 관측치</td>
         </tr>
       </tbody>
     </table>
@@ -60,20 +60,20 @@
 </section>
 
 <section class="panel">
-  <h2>Accumulation By Symbol</h2>
+  <h2>심볼별 누적 현황</h2>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Symbol</th>
-          <th>Rows</th>
-          <th>Closed Rows</th>
-          <th>First Open Time</th>
-          <th>Latest Open Time</th>
-          <th>Gap Count</th>
-          <th>Missing Estimate</th>
-          <th>Duplicate Rows</th>
-          <th>OHLC Issues</th>
+          <th>심볼</th>
+          <th>행 수</th>
+          <th>닫힌 행 수</th>
+          <th>첫 시작 시각</th>
+          <th>최신 시작 시각</th>
+          <th>공백 수</th>
+          <th>누락 추정</th>
+          <th>중복 행</th>
+          <th>OHLC 이슈</th>
         </tr>
       </thead>
       <tbody>
@@ -90,7 +90,7 @@
           <td>{{ row.ohlc_issue_rows }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="9">No closed candles loaded yet.</td></tr>
+        <tr><td colspan="9">아직 닫힌 캔들이 없습니다.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -98,20 +98,20 @@
 </section>
 
 <section class="panel">
-  <h2>{{ ui.help_label("Forming Candle", "forming_candle") }}</h2>
+  <h2>{{ ui.help_label("형성 중 캔들", "forming_candle") }}</h2>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Symbol</th>
-          <th>Interval</th>
-          <th>Open Time</th>
-          <th>Close Time</th>
-          <th>Open</th>
-          <th>High</th>
-          <th>Low</th>
-          <th>Close</th>
-          <th>Volume</th>
+          <th>심볼</th>
+          <th>간격</th>
+          <th>시작 시각</th>
+          <th>종료 시각</th>
+          <th>시가</th>
+          <th>고가</th>
+          <th>저가</th>
+          <th>종가</th>
+          <th>거래량</th>
         </tr>
       </thead>
       <tbody>
@@ -128,7 +128,7 @@
           <td>{{ snapshot.forming_candle.volume }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="9">No forming candle is currently displayed.</td></tr>
+        <tr><td colspan="9">현재 표시 중인 형성 중 캔들이 없습니다.</td></tr>
         {% endif %}
       </tbody>
     </table>
@@ -136,16 +136,16 @@
 </section>
 
 <section class="panel">
-  <h2>{{ ui.help_label("Data Quality Issues", "validation_issue") }}</h2>
+  <h2>{{ ui.help_label("데이터 품질 이슈", "validation_issue") }}</h2>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Severity</th>
-          <th>Check</th>
-          <th>Symbol</th>
-          <th>Count</th>
-          <th>Message</th>
+          <th>심각도</th>
+          <th>검사</th>
+          <th>심볼</th>
+          <th>건수</th>
+          <th>메시지</th>
         </tr>
       </thead>
       <tbody>
@@ -158,7 +158,7 @@
           <td>{{ issue.message }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5">No validation issues detected.</td></tr>
+        <tr><td colspan="5">검증 이슈가 감지되지 않았습니다.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -166,18 +166,18 @@
 </section>
 
 <section class="panel">
-  <h2>Latest Closed Candles</h2>
+  <h2>최신 닫힌 캔들</h2>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Symbol</th>
-          <th>{{ ui.help_label("Open Time", "closed_candle") }}</th>
-          <th>{{ ui.help_label("Open", "closed_candle") }}</th>
-          <th>{{ ui.help_label("High", "closed_candle") }}</th>
-          <th>{{ ui.help_label("Low", "closed_candle") }}</th>
-          <th>{{ ui.help_label("Close", "closed_candle") }}</th>
-          <th>Volume</th>
+          <th>심볼</th>
+          <th>{{ ui.help_label("시작 시각", "closed_candle") }}</th>
+          <th>{{ ui.help_label("시가", "closed_candle") }}</th>
+          <th>{{ ui.help_label("고가", "closed_candle") }}</th>
+          <th>{{ ui.help_label("저가", "closed_candle") }}</th>
+          <th>{{ ui.help_label("종가", "closed_candle") }}</th>
+          <th>거래량</th>
         </tr>
       </thead>
       <tbody>
@@ -192,7 +192,7 @@
           <td>{{ row.volume }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="7">No closed candles loaded yet.</td></tr>
+        <tr><td colspan="7">아직 닫힌 캔들이 없습니다.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -200,19 +200,19 @@
 </section>
 
 <section class="panel">
-  <h2>Recent Accumulated Candles</h2>
+  <h2>최근 누적 캔들</h2>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Symbol</th>
-          <th>Interval</th>
-          <th>{{ ui.help_label("Open Time", "closed_candle") }}</th>
-          <th>{{ ui.help_label("Open", "closed_candle") }}</th>
-          <th>{{ ui.help_label("High", "closed_candle") }}</th>
-          <th>{{ ui.help_label("Low", "closed_candle") }}</th>
-          <th>{{ ui.help_label("Close", "closed_candle") }}</th>
-          <th>Volume</th>
+          <th>심볼</th>
+          <th>간격</th>
+          <th>{{ ui.help_label("시작 시각", "closed_candle") }}</th>
+          <th>{{ ui.help_label("시가", "closed_candle") }}</th>
+          <th>{{ ui.help_label("고가", "closed_candle") }}</th>
+          <th>{{ ui.help_label("저가", "closed_candle") }}</th>
+          <th>{{ ui.help_label("종가", "closed_candle") }}</th>
+          <th>거래량</th>
         </tr>
       </thead>
       <tbody>
@@ -228,7 +228,7 @@
           <td>{{ row.volume }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="8">No accumulated candles yet.</td></tr>
+        <tr><td colspan="8">아직 누적 캔들이 없습니다.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -1,26 +1,26 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Methodology{% endblock %}
-{% block heading %}Methodology{% endblock %}
+{% block title %}CMVA 방법론{% endblock %}
+{% block heading %}방법론{% endblock %}
 {% block content %}
 <section class="panel prose">
-  <h2 id="closed-candle">{{ ui.help_label("Closed Candle Discipline", "closed_candle") }}</h2>
-  <p>CMVA may display a current forming candle, but only closed candles enter storage, features, models, shock labels, regimes, diagnostics, and validation.</p>
-  <h2 id="data-pipeline">{{ ui.help_label("Data Accumulation", "bootstrap_progress") }}</h2>
-  <p>Historical Binance Spot candles are accumulated by symbol and interval, then checked for missing gaps, duplicate timestamps, OHLC consistency, volume validity, and unclosed candle leakage.</p>
-  <h2 id="volatility">{{ ui.help_label("Volatility", "volatility") }}</h2>
-  <p>Realized volatility, EWMA volatility, range volatility, and GARCH forecast volatility describe return variability over the selected candle interval.</p>
-  <h2 id="garch">{{ ui.help_label("GARCH Forecast", "garch_forecast") }}</h2>
-  <p>The forecast is <code>sigma_{t+1|t}</code>, the next-candle volatility forecast from information available at time <code>t</code>. It is not a price direction forecast.</p>
-  <h2 id="trend">{{ ui.help_label("Trend", "trend_slope") }}</h2>
-  <p>Trend features use rolling OLS on log price and diagnostic t-statistics. They describe the observed path and are not buy or sell instructions.</p>
-  <h2 id="correlation">{{ ui.help_label("Correlation", "average_correlation") }}</h2>
-  <p>Correlation, BTC beta, PCA1 share, and dispersion describe whether the market is moving together or separating by symbol.</p>
-  <h2 id="shock">{{ ui.help_label("Shock Score", "shock_score") }}</h2>
-  <p>Shock scoring compares the return observed at <code>t</code> with the forecast made before <code>t</code>.</p>
-  <h2 id="validation">{{ ui.help_label("Walk-Forward Validation", "walk_forward") }}</h2>
-  <p>Backtesting in CMVA means model validation: forecast losses, calibration, and residual tests.</p>
-  <h2 id="lookahead">{{ ui.help_label("Look-Ahead Bias", "lookahead_bias") }}</h2>
-  <p>Features at <code>t</code> use data through <code>t</code>; forecast evaluation aligns <code>forecast_{t|t-1}</code> against <code>r_t</code>.</p>
+  <h2 id="closed-candle">{{ ui.help_label("닫힌 캔들 원칙", "closed_candle") }}</h2>
+  <p>CMVA는 현재 형성 중인 캔들을 표시할 수 있지만, 저장, 특징, 모델, 쇼크 라벨, 레짐, 진단, 검증에는 닫힌 캔들만 사용합니다.</p>
+  <h2 id="data-pipeline">{{ ui.help_label("데이터 누적", "bootstrap_progress") }}</h2>
+  <p>Binance Spot 과거 캔들은 심볼과 간격별로 누적되며, 누락 공백, 중복 타임스탬프, OHLC 일관성, 거래량 유효성, 미완성 캔들 유입 여부를 검사합니다.</p>
+  <h2 id="volatility">{{ ui.help_label("변동성", "volatility") }}</h2>
+  <p>실현 변동성, EWMA 변동성, 범위 기반 변동성, GARCH 예측 변동성은 선택한 캔들 간격의 수익률 변동성을 설명합니다.</p>
+  <h2 id="garch">{{ ui.help_label("GARCH 예측", "garch_forecast") }}</h2>
+  <p>예측값은 <code>sigma_{t+1|t}</code>이며, 시점 <code>t</code>까지의 정보로 계산한 다음 캔들 변동성 예측입니다. 가격 방향 예측이 아닙니다.</p>
+  <h2 id="trend">{{ ui.help_label("추세", "trend_slope") }}</h2>
+  <p>추세 특징은 로그 가격의 롤링 OLS와 진단용 t-통계량을 사용합니다. 관측 경로를 설명할 뿐 매수 또는 매도 지시가 아닙니다.</p>
+  <h2 id="correlation">{{ ui.help_label("상관", "average_correlation") }}</h2>
+  <p>상관, BTC 베타, PCA1 비중, 분산도는 시장이 함께 움직이는지 또는 심볼별로 분리되는지를 설명합니다.</p>
+  <h2 id="shock">{{ ui.help_label("쇼크 점수", "shock_score") }}</h2>
+  <p>쇼크 점수는 <code>t</code>에서 관측된 수익률을 <code>t</code> 이전에 만든 변동성 예측과 비교합니다.</p>
+  <h2 id="validation">{{ ui.help_label("워크포워드 검증", "walk_forward") }}</h2>
+  <p>CMVA에서 백테스트는 모델 검증을 뜻합니다. 예측 손실, 보정, 잔차 검정을 확인합니다.</p>
+  <h2 id="lookahead">{{ ui.help_label("룩어헤드 편향", "lookahead_bias") }}</h2>
+  <p><code>t</code>의 특징은 <code>t</code>까지의 데이터만 사용하고, 예측 평가는 <code>forecast_{t|t-1}</code>과 <code>r_t</code>를 정렬합니다.</p>
 </section>
 {% endblock %}

@@ -55,8 +55,8 @@ def test_one_day_slice_returns_latest_24_hourly_rows():
 def test_default_range_config_values():
     config = CMVAConfig()
 
-    assert config.interval == "1h"
-    assert config.forecast_horizon == "1 bar = next 1 hour"
+    assert config.interval == "15m"
+    assert config.forecast_horizon == "1 bar = next 15 minutes"
     assert config.dashboard_time_range == "1d"
     assert config.forecast_time_range == "1w"
     assert config.backtest_time_range == "1y"
@@ -106,15 +106,15 @@ def test_new_web_pages_render_range_and_model_lab_surfaces(tmp_path, synthetic_c
     client = TestClient(create_web_app(app, start_background=False))
 
     pages = {
-        "/setup": "Setup",
-        "/overview": "Overview",
-        "/data-quality": "Data Quality",
-        "/model-lab": "Model Lab",
-        "/current-market-state": "Current Market State",
-        "/trend-seasonality": "Trend & Seasonality",
-        "/diagnostics": "Diagnostics",
-        "/rolling-evaluation": "Rolling Evaluation",
-        "/model-comparison": "Model Comparison",
+        "/setup": "초기 설정",
+        "/overview": "개요",
+        "/data-quality": "데이터 품질",
+        "/model-lab": "모델 실험실",
+        "/current-market-state": "현재 시장 상태",
+        "/trend-seasonality": "추세 및 계절성",
+        "/diagnostics": "진단",
+        "/rolling-evaluation": "롤링 평가",
+        "/model-comparison": "모델 비교",
     }
 
     for path, heading in pages.items():

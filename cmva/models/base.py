@@ -16,6 +16,21 @@ class FitResult:
     aic: float | None = None
     bic: float | None = None
     message: str = ""
+    model_id: str | None = None
+    model_family: str | None = None
+    target: str | None = None
+    estimator: str | None = None
+    log_likelihood: float | None = None
+    nobs: int | None = None
+    parameter_count: int | None = None
+    hqic: float | None = None
+    diagnostics: dict[str, object] = field(default_factory=dict)
+    converged: bool | None = None
+    forecast_mean: float | None = None
+    forecast_variance: float | None = None
+    forecast_volatility: float | None = None
+    model_family_label: str | None = None
+    degraded: bool = False
 
 
 @dataclass

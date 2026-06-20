@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "_macros.html" import metric_card %}
+
+{% block title %}시뮬레이션 실행 - CMVA{% endblock %}
+{% block heading %}시뮬레이션 실행{% endblock %}
+
+{% block content %}
+{% set spec = simulation.spec %}
+{% set progress = simulation.progress %}
+<div id="simulation-app" data-run-id="{{ simulation.run_id }}">
+  <section class="panel">
+    <h2>실행 요약</h2>
+    <dl class="kv-list compact">
+      <div><dt>실행 ID</dt><dd id="sim-run-id">{{ simulation.run_id }}</dd></div>
+      <div><dt>실행명</dt><dd id="sim-run-name">{{ spec.run_name }}</dd></div>
+      <div><dt>상태</dt><dd id="sim-status">{{ progress.status_label }}</dd></div>
+      <div><dt>심볼</dt><dd id="sim-symbols">{{ ", ".join(spec.symbols) }}</dd></div>
+      <div><dt>캔들 간격</dt><dd id="sim-interval">{{ spec.interval }}</dd></div>
+      <div><dt>데이터 기간</dt><dd id="sim-data-range">{{ spec.data_start }} - {{ spec.data_end }}</dd></div>
+      <div><dt>T</dt><dd id="sim-t">{{ spec.T }} ({{ spec.t_bars }} bars)</dd></div>
+      <div><dt>dT</dt><dd id="sim-dt">{{ spec.dT }} ({{ spec.dt_bars }} bars)</dd></div>
+      <div><dt>S</dt><dd id="sim-s">{{ spec.S }}</dd></div>
+      <div><dt>S 역할</dt><dd id="sim-s-role">{{ spec.s_role }}</dd></div>
+      <div><dt>예측 horizon</dt><dd id="sim-horizon">{{ spec.forecast_horizon_bars }} bars</dd></div>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <h2>진행 상황</h2>
+    <div class="progress-track"><span id="simulation-progress-bar" style="width: {{ (progress.progress_pct or 0) * 100 }}%"></span></div>
+    <dl class="kv-list compact">
+      <div><dt>전체 진행률</dt><dd id="sim-progress-text">{{ "%.1f"|format((progress.progress_pct or 0) * 100) }}%</dd></div>
+      <div><dt>현재 시점</dt><dd id="sim-current-origin">{{ progress.current_origin_time or "-" }}</dd></div>
+      <div><dt>현재 심볼</dt><dd id="sim-active-symbol">{{ progress.active_symbol or "-" }}</dd></div>
+      <div><dt>현재 모델</dt><dd id="sim-active-model">{{ progress.active_model or "-" }}</dd></div>
+      <div><dt>완료된 적합 수</dt><dd id="sim-completed-fits">{{ progress.completed_fits or 0 }}</dd></div>
+      <div><dt>전체 적합 수</dt><dd id="sim-total-fits">{{ progress.total_fits or 0 }}</dd></div>
+      <div><dt>최근 갱신 시각</dt><dd id="sim-updated-at">{{ progress.updated_at or "-" }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="grid metrics">
+    {{ metric_card("변동성 점수", simulation.latest_score.volatility_score_0_100 if simulation.latest_score else None) }}
+    {{ metric_card("기대값 변화 점수", simulation.latest_score.expectation_score_0_100 if simulation.latest_score else None) }}
+    {{ metric_card("추세 점수", simulation.latest_score.trend_score_minus100_100 if simulation.latest_score else None) }}
+    {{ metric_card("계절성 점수", simulation.latest_score.seasonality_score_0_100 if simulation.latest_score else None) }}
+    {{ metric_card("신뢰도", simulation.latest_score.volatility_confidence_0_1 if simulation.latest_score else None) }}
+  </section>
+
+  <section class="panel">
+    <h2>실시간 그래프</h2>
+    <div class="chart-grid">
+      <div class="echart line-chart simulation-chart" data-sim-series="volatility_score" aria-label="변동성 점수"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="expectation_score" aria-label="기대값 변화 점수"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="trend_score" aria-label="추세 점수"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="seasonality_score" aria-label="계절성 점수"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="qlike_by_model" aria-label="모델별 QLIKE"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="forecast_vs_realized_volatility" aria-label="예측 변동성 vs 실현 변동성"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>최근 결과 표</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>시점</th>
+            <th>심볼</th>
+            <th>선택 모델</th>
+            <th>변동성 점수</th>
+            <th>기대값 변화 점수</th>
+            <th>추세 점수</th>
+            <th>계절성 점수</th>
+            <th>신뢰도</th>
+            <th>경고</th>
+          </tr>
+        </thead>
+        <tbody id="simulation-score-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>오류/경고</h2>
+    <ul id="simulation-warning-list">
+      {% for warning in simulation.warnings %}
+      <li>{{ warning }}</li>
+      {% else %}
+      <li>표시할 경고가 없습니다.</li>
+      {% endfor %}
+    </ul>
+    <p><a id="simulation-results-link" href="/results/{{ simulation.run_id }}">시뮬레이션 결과 보기</a></p>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.CMVA_SIMULATION_SNAPSHOT = {{ simulation | tojson }};
+</script>
+<script src="{{ url_for('static', path='/js/simulation.js') }}"></script>
+{% endblock %}

@@ -21,7 +21,7 @@ class CMVAConfig:
     symbols: list[str] = field(
         default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
     )
-    interval: str = "1h"
+    interval: str = "15m"
     analysis_period: str = "1y"
     training_window: str = "30d"
     forecast_horizon_bars: int = 1
@@ -136,6 +136,10 @@ class CMVAConfig:
     def validation_dir(self) -> Path:
         return self.data_dir / "validation"
 
+    @property
+    def simulations_dir(self) -> Path:
+        return self.data_dir / "simulations"
+
 
 def load_config(path: str | Path = "cmva.toml") -> CMVAConfig:
     config_path = Path(path)
@@ -153,5 +157,6 @@ def ensure_artifact_dirs(config: CMVAConfig) -> None:
         config.features_dir,
         config.models_dir,
         config.validation_dir,
+        config.simulations_dir,
     ):
         path.mkdir(parents=True, exist_ok=True)

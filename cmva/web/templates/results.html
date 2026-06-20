@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}시뮬레이션 결과 - CMVA{% endblock %}
+{% block heading %}시뮬레이션 결과{% endblock %}
+
+{% block content %}
+{% set spec = simulation.spec %}
+{% set conclusion = simulation.conclusion %}
+<div id="simulation-results" data-run-id="{{ simulation.spec.run_id or simulation.run_id }}">
+  <section class="panel">
+    <h2>시뮬레이션 결론</h2>
+    <p>{{ conclusion.headline_summary or "완료된 결론이 없습니다." }}</p>
+  </section>
+
+  <section class="panel">
+    <h2>입력값 요약</h2>
+    <dl class="kv-list compact">
+      <div><dt>심볼</dt><dd>{{ ", ".join(spec.symbols) }}</dd></div>
+      <div><dt>캔들 간격</dt><dd>{{ spec.interval }}</dd></div>
+      <div><dt>데이터 기간</dt><dd>{{ spec.data_start }} - {{ spec.data_end }}</dd></div>
+      <div><dt>T</dt><dd>{{ spec.T }} ({{ spec.t_bars }} bars)</dd></div>
+      <div><dt>dT</dt><dd>{{ spec.dT }} ({{ spec.dt_bars }} bars)</dd></div>
+      <div><dt>S</dt><dd>{{ spec.S }}</dd></div>
+      <div><dt>S 역할</dt><dd>{{ spec.s_role }}</dd></div>
+      <div><dt>horizon</dt><dd>{{ spec.forecast_horizon_bars }} bars</dd></div>
+      <div><dt>후보 그룹</dt><dd>{{ ", ".join(spec.candidate_model_groups) }}</dd></div>
+      <div><dt>점수화</dt><dd>{{ spec.scoring_method }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <h2>데이터 품질 요약</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>심볼</th>
+            <th>첫 캔들</th>
+            <th>최신 캔들</th>
+            <th>커버리지</th>
+            <th>누락 캔들</th>
+            <th>누락률</th>
+            <th>origin 수</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for symbol, row in simulation.data_validation.symbols.items() %}
+          <tr>
+            <td>{{ symbol }}</td>
+            <td>{{ row.first_open_time }}</td>
+            <td>{{ row.latest_open_time }}</td>
+            <td>{{ row.coverage_pct }}%</td>
+            <td>{{ row.missing_candle_count }}</td>
+            <td>{{ "%.2f"|format(row.missing_rate * 100) }}%</td>
+            <td>{{ row.origin_count }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7">데이터 품질 정보가 없습니다.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>최종 결론 표</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>심볼</th>
+            <th>기준 시점</th>
+            <th>선택 모델</th>
+            <th>추정 방식</th>
+            <th>변동성 점수</th>
+            <th>변동성 등급</th>
+            <th>기대값 변화 점수</th>
+            <th>기대값 등급</th>
+            <th>추세 점수</th>
+            <th>추세 등급</th>
+            <th>계절성 점수</th>
+            <th>계절성 등급</th>
+            <th>AIC</th>
+            <th>BIC</th>
+            <th>QLIKE</th>
+            <th>신뢰도</th>
+            <th>주요 경고</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in conclusion.latest_scores %}
+          <tr>
+            <td>{{ row.symbol }}</td>
+            <td>{{ row.origin_time }}</td>
+            <td>{{ row.selected_model_id }}</td>
+            <td>{{ row.selected_estimator }}</td>
+            <td>{{ row.volatility_score_0_100 }}</td>
+            <td>{{ row.volatility_level_label }}</td>
+            <td>{{ row.expectation_score_0_100 }}</td>
+            <td>{{ row.expectation_level_label }}</td>
+            <td>{{ row.trend_score_minus100_100 }}</td>
+            <td>{{ row.trend_level_label }}</td>
+            <td>{{ row.seasonality_score_0_100 }}</td>
+            <td>{{ row.seasonality_level_label }}</td>
+            <td>{{ row.aic }}</td>
+            <td>{{ row.bic }}</td>
+            <td>{{ row.qlike }}</td>
+            <td>{{ row.volatility_confidence_0_1 }}</td>
+            <td>{{ "; ".join(row.warnings) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="17">최종 점수가 없습니다.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>시점별 점수 표</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>시점</th>
+            <th>심볼</th>
+            <th>변동성 점수</th>
+            <th>기대값 변화 점수</th>
+            <th>추세 점수</th>
+            <th>계절성 점수</th>
+            <th>선택 모델</th>
+            <th>AIC</th>
+            <th>BIC</th>
+            <th>QLIKE</th>
+            <th>신뢰도</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in simulation.scores %}
+          <tr>
+            <td>{{ row.origin_time }}</td>
+            <td>{{ row.symbol }}</td>
+            <td>{{ row.volatility_score_0_100 }}</td>
+            <td>{{ row.expectation_score_0_100 }}</td>
+            <td>{{ row.trend_score_minus100_100 }}</td>
+            <td>{{ row.seasonality_score_0_100 }}</td>
+            <td>{{ row.selected_model_id }}</td>
+            <td>{{ row.aic }}</td>
+            <td>{{ row.bic }}</td>
+            <td>{{ row.qlike }}</td>
+            <td>{{ row.volatility_confidence_0_1 }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11">시점별 점수가 없습니다.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>모델 평가 표</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>모델</th>
+            <th>origin 수</th>
+            <th>수렴률</th>
+            <th>평균 AIC</th>
+            <th>평균 BIC</th>
+            <th>평균 HQIC</th>
+            <th>평균 QLIKE</th>
+            <th>RMSE</th>
+            <th>MAE</th>
+            <th>순위 안정성</th>
+            <th>복합 순위 점수</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in conclusion.model_evaluation %}
+          <tr>
+            <td>{{ row.candidate }}</td>
+            <td>{{ row.origin_count }}</td>
+            <td>{{ "%.2f"|format(row.convergence_rate) }}</td>
+            <td>{{ row.avg_aic }}</td>
+            <td>{{ row.avg_bic }}</td>
+            <td>{{ row.avg_hqic }}</td>
+            <td>{{ row.avg_qlike }}</td>
+            <td>{{ row.rmse }}</td>
+            <td>{{ row.mae }}</td>
+            <td>{{ row.rank_stability }}</td>
+            <td>{{ row.composite_rank_score }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11">모델 평가 정보가 없습니다.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>그래프</h2>
+    <div class="chart-grid">
+      <div class="echart line-chart simulation-chart" data-sim-series="aic_by_model" aria-label="모델별 AIC"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="bic_by_model" aria-label="모델별 BIC"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="hqic_by_model" aria-label="모델별 HQIC"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="qlike_by_model" aria-label="모델별 QLIKE"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="rmse_mae_by_model" aria-label="모델별 RMSE/MAE"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="selected_model" aria-label="선택 모델 타임라인"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="volatility_score" aria-label="변동성 점수"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="forecast_vs_realized_volatility" aria-label="예측 변동성 vs 실현 변동성"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="expectation_score" aria-label="기대값 변화 점수"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="trend_score" aria-label="추세 점수"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="seasonality_score" aria-label="계절성 점수"></div>
+      <div class="echart line-chart simulation-chart" data-sim-series="confidence" aria-label="신뢰도"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>진단</h2>
+    <ul>
+      {% for warning in simulation.warnings %}
+      <li>{{ warning }}</li>
+      {% else %}
+      <li>표시할 진단 경고가 없습니다.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.CMVA_SIMULATION_SNAPSHOT = {{ simulation | tojson }};
+</script>
+<script src="{{ url_for('static', path='/js/simulation.js') }}"></script>
+{% endblock %}

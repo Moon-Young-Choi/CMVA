@@ -1,21 +1,21 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Validation{% endblock %}
-{% block heading %}Backtest / Validation{% endblock %}
+{% block title %}CMVA 백테스트 / 검증{% endblock %}
+{% block heading %}백테스트 / 검증{% endblock %}
 {% block content %}
 <section class="grid metrics">
-  {{ ui.metric_card("Validation Observations", snapshot.validation.validation_observations, "walk_forward") }}
+  {{ ui.metric_card("검증 관측치", snapshot.validation.validation_observations, "walk_forward") }}
   {{ ui.metric_card("GARCH RMSE", snapshot.validation.garch_rmse, "rmse") }}
   {{ ui.metric_card("EWMA RMSE", snapshot.validation.ewma_rmse, "rmse") }}
   {{ ui.metric_card("Naive RMSE", snapshot.validation.naive_rmse, "rmse") }}
   {{ ui.metric_card("GARCH QLIKE", snapshot.validation.garch_qlike, "qlike") }}
   {{ ui.metric_card("EWMA QLIKE", snapshot.validation.ewma_qlike, "qlike") }}
   {{ ui.metric_card("Naive QLIKE", snapshot.validation.naive_qlike, "qlike") }}
-  {{ ui.metric_card("Best QLIKE Model", snapshot.validation.best_qlike_model, "qlike") }}
+  {{ ui.metric_card("최저 QLIKE 모델", snapshot.validation.best_qlike_model, "qlike") }}
 </section>
-{{ ui.diagnostics_table("Model Validation Diagnostics", snapshot.diagnostics.validation) }}
+{{ ui.diagnostics_table("모델 검증 진단", snapshot.diagnostics.validation) }}
 <section class="panel">
-  <h2>QLIKE Loss Timelines</h2>
+  <h2>QLIKE 손실 타임라인</h2>
   <div class="chart-grid">
     <canvas class="line-chart" data-series="garch_qlike"></canvas>
     <canvas class="line-chart" data-series="ewma_qlike"></canvas>
@@ -23,25 +23,25 @@
   </div>
 </section>
 <section class="panel">
-  <h2>Recent QLIKE Losses</h2>
+  <h2>최근 QLIKE 손실</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Time</th><th>GARCH</th><th>EWMA</th><th>Naive</th></tr></thead>
+      <thead><tr><th>시각</th><th>GARCH</th><th>EWMA</th><th>Naive</th></tr></thead>
       <tbody>
       {% for row in snapshot.validation_losses[-40:] %}
         <tr><td>{{ row.open_time or row.index }}</td><td>{{ row.garch_qlike }}</td><td>{{ row.ewma_qlike }}</td><td>{{ row.naive_qlike }}</td></tr>
       {% else %}
-        <tr><td colspan="4">No validation losses yet.</td></tr>
+        <tr><td colspan="4">아직 검증 손실이 없습니다.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
 <section class="panel">
-  <h2>GARCH Calibration Deciles</h2>
+  <h2>GARCH 보정 decile</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Forecast Decile</th><th>Forecast Vol</th><th>Realized Abs Return</th><th>Observations</th></tr></thead>
+      <thead><tr><th>예측 decile</th><th>예측 변동성</th><th>실현 절대수익률</th><th>관측치</th></tr></thead>
       <tbody>
       {% for row in snapshot.calibration_by_decile %}
         <tr>
@@ -51,17 +51,17 @@
           <td>{{ row.observations }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="4">No calibration table yet.</td></tr>
+        <tr><td colspan="4">아직 보정 표가 없습니다.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
 <section class="panel">
-  <h2>Realized Volatility By Regime</h2>
+  <h2>레짐별 실현 변동성</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Regime</th><th>Realized Vol</th><th>Mean Abs Return</th><th>Observations</th></tr></thead>
+      <thead><tr><th>레짐</th><th>실현 변동성</th><th>평균 절대수익률</th><th>관측치</th></tr></thead>
       <tbody>
       {% for row in snapshot.realized_vol_by_regime %}
         <tr>
@@ -71,7 +71,7 @@
           <td>{{ row.observations }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="4">No regime validation table yet.</td></tr>
+        <tr><td colspan="4">아직 레짐 검증 표가 없습니다.</td></tr>
       {% endfor %}
       </tbody>
     </table>

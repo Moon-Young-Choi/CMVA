@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}시뮬레이션 목록 - CMVA{% endblock %}
+{% block heading %}실행 중인 시뮬레이션{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>실행 ID</th>
+          <th>실행명</th>
+          <th>상태</th>
+          <th>진행률</th>
+          <th>심볼</th>
+          <th>기간</th>
+          <th>실행</th>
+          <th id="results">결과</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in simulation_runs %}
+        <tr>
+          <td>{{ run.run_id }}</td>
+          <td>{{ run.run_name }}</td>
+          <td>{{ run.progress.status_label }}</td>
+          <td>{{ "%.1f"|format((run.progress.progress_pct or 0) * 100) }}%</td>
+          <td>{{ ", ".join(run.symbols) }}</td>
+          <td>{{ run.data_start }} - {{ run.data_end }}</td>
+          <td><a href="/simulation/{{ run.run_id }}">열기</a></td>
+          <td><a href="/results/{{ run.run_id }}">보기</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">표시할 시뮬레이션이 없습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

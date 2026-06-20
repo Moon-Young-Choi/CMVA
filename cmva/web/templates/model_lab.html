@@ -1,36 +1,36 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Model Lab{% endblock %}
-{% block heading %}Model Lab{% endblock %}
+{% block title %}CMVA 모델 실험실{% endblock %}
+{% block heading %}모델 실험실{% endblock %}
 {% block content %}
 <section class="grid metrics">
-  {{ ui.metric_card("Search Mode", cmva.config.search_mode, "two_stage_search") }}
-  {{ ui.metric_card("Job Status", snapshot.model_lab.job_status.status, "model_job") }}
-  {{ ui.metric_card("Queue Size", snapshot.model_lab.job_status.queue_size, "model_job") }}
-  {{ ui.metric_card("Cache Hit Rate", snapshot.model_lab.job_status.cache_hit_rate, "model_cache") }}
-  {{ ui.metric_card("Candidate Count", snapshot.model_lab.job_status.candidate_count, "candidate_count") }}
-  {{ ui.metric_card("Stage 1 Fits", snapshot.model_lab.job_status.stage1_fits, "two_stage_search") }}
-  {{ ui.metric_card("Stage 2 Fits", snapshot.model_lab.job_status.stage2_fits, "two_stage_search") }}
-  {{ ui.metric_card("Evaluated Targets", snapshot.model_lab.job_status.evaluated_targets, "target_view") }}
-  {{ ui.metric_card("C++ Backend", snapshot.cpp_backend.active, "cpp_backend") }}
+  {{ ui.metric_card("탐색 모드", cmva.config.search_mode, "two_stage_search") }}
+  {{ ui.metric_card("작업 상태", snapshot.model_lab.job_status.status, "model_job") }}
+  {{ ui.metric_card("대기열 크기", snapshot.model_lab.job_status.queue_size, "model_job") }}
+  {{ ui.metric_card("캐시 적중률", snapshot.model_lab.job_status.cache_hit_rate, "model_cache") }}
+  {{ ui.metric_card("후보 모델 수", snapshot.model_lab.job_status.candidate_count, "candidate_count") }}
+  {{ ui.metric_card("1단계 적합 수", snapshot.model_lab.job_status.stage1_fits, "two_stage_search") }}
+  {{ ui.metric_card("2단계 적합 수", snapshot.model_lab.job_status.stage2_fits, "two_stage_search") }}
+  {{ ui.metric_card("평가 대상", snapshot.model_lab.job_status.evaluated_targets, "target_view") }}
+  {{ ui.metric_card("C++ 백엔드", snapshot.cpp_backend.active, "cpp_backend") }}
 </section>
 
 <section class="panel model-job-panel">
-  <h2>Model Job Progress</h2>
-  <div class="progress-track" aria-label="Model lab computation progress">
+  <h2>모델 작업 진행</h2>
+  <div class="progress-track" aria-label="모델 실험실 계산 진행률">
     <span id="model-lab-progress-bar" style="width: {{ ((snapshot.model_lab.job_status.progress_pct or 0) * 100) | round(1) }}%"></span>
   </div>
   <dl class="kv-list compact">
-    <div><dt>Status</dt><dd id="model-lab-status">{{ snapshot.model_lab.job_status.status or "idle" }}</dd></div>
-    <div><dt>Stage</dt><dd id="model-lab-stage">{{ snapshot.model_lab.job_status.active_stage or "-" }}</dd></div>
-    <div><dt>Target</dt><dd id="model-lab-target">{{ snapshot.model_lab.job_status.active_target or "-" }}</dd></div>
-    <div><dt>Candidate</dt><dd id="model-lab-candidate">{{ snapshot.model_lab.job_status.active_candidate or "-" }}</dd></div>
-    <div><dt>Fits</dt><dd><span id="model-lab-completed-fits">{{ snapshot.model_lab.job_status.completed_fits or 0 }}</span> / <span id="model-lab-total-fits">{{ snapshot.model_lab.job_status.total_fits or 0 }}</span></dd></div>
+    <div><dt>상태</dt><dd id="model-lab-status">{{ snapshot.model_lab.job_status.status or "idle" }}</dd></div>
+    <div><dt>단계</dt><dd id="model-lab-stage">{{ snapshot.model_lab.job_status.active_stage or "-" }}</dd></div>
+    <div><dt>대상</dt><dd id="model-lab-target">{{ snapshot.model_lab.job_status.active_target or "-" }}</dd></div>
+    <div><dt>후보</dt><dd id="model-lab-candidate">{{ snapshot.model_lab.job_status.active_candidate or "-" }}</dd></div>
+    <div><dt>적합 수</dt><dd><span id="model-lab-completed-fits">{{ snapshot.model_lab.job_status.completed_fits or 0 }}</span> / <span id="model-lab-total-fits">{{ snapshot.model_lab.job_status.total_fits or 0 }}</span></dd></div>
   </dl>
 </section>
 
 <section class="panel">
-  <h2>Target Views</h2>
+  <h2>대상 뷰</h2>
   <div class="chart-grid">
     <canvas class="line-chart" data-series="log_return"></canvas>
     <canvas class="line-chart" data-series="log_price"></canvas>
@@ -38,10 +38,10 @@
 </section>
 
 <section class="panel">
-  <h2>Stage 1 Candidate Scan</h2>
+  <h2>1단계 후보 스캔</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Model</th><th>Family</th><th>Target</th><th>AIC</th><th>BIC</th><th>HQIC</th><th>QLIKE</th><th>RMSE</th><th>Status</th><th>Fit ms</th></tr></thead>
+      <thead><tr><th>모델</th><th>계열</th><th>대상</th><th>AIC</th><th>BIC</th><th>HQIC</th><th>QLIKE</th><th>RMSE</th><th>상태</th><th>적합 ms</th></tr></thead>
       <tbody>
       {% for row in snapshot.model_lab.stage1 %}
         <tr>
@@ -50,7 +50,7 @@
           <td>{{ row.fit_status }}</td><td>{{ row.fit_time_ms }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="10">No candidate scan results yet.</td></tr>
+        <tr><td colspan="10">아직 후보 스캔 결과가 없습니다.</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -58,10 +58,10 @@
 </section>
 
 <section class="panel">
-  <h2>Stage 2 Detailed Evaluation</h2>
+  <h2>2단계 상세 평가</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Rank</th><th>Model</th><th>Family</th><th>Target</th><th>QLIKE</th><th>RMSE</th><th>MAE</th><th>Bias</th><th>Forecast Corr</th><th>Rank Stability</th></tr></thead>
+      <thead><tr><th>순위</th><th>모델</th><th>계열</th><th>대상</th><th>QLIKE</th><th>RMSE</th><th>MAE</th><th>편향</th><th>예측-실현 상관</th><th>순위 안정성</th></tr></thead>
       <tbody>
       {% for row in snapshot.model_lab.leaderboard %}
         <tr>
@@ -70,7 +70,7 @@
           <td>{{ row.forecast_realized_corr }}</td><td>{{ row.rank_stability }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="10">No detailed evaluation results yet.</td></tr>
+        <tr><td colspan="10">아직 상세 평가 결과가 없습니다.</td></tr>
       {% endfor %}
       </tbody>
     </table>

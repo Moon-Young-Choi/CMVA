@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Models{% endblock %}
-{% block heading %}Models{% endblock %}
+{% block title %}CMVA 모델{% endblock %}
+{% block heading %}모델{% endblock %}
 {% block content %}
 <section class="grid metrics">
-  {{ ui.metric_card("Forecast Horizon", snapshot.summary.forecast_horizon, "garch_forecast") }}
-  {{ ui.metric_card("Basket Forecast Model", snapshot.model_status.basket_forecast_model, "garch_forecast") }}
-  {{ ui.metric_card("Fallback Status", snapshot.model_status.basket_forecast_degraded, "garch_forecast") }}
-  {{ ui.metric_card("Refit Countdown", snapshot.model_status.refit_countdown) }}
-  {{ ui.metric_card("Selected Model", snapshot.model_status.selected_model, "garch_forecast") }}
+  {{ ui.metric_card("예측 horizon", snapshot.summary.forecast_horizon, "garch_forecast") }}
+  {{ ui.metric_card("바스켓 예측 모델", snapshot.model_status.basket_forecast_model, "garch_forecast") }}
+  {{ ui.metric_card("폴백 상태", snapshot.model_status.basket_forecast_degraded, "garch_forecast") }}
+  {{ ui.metric_card("재적합 카운트다운", snapshot.model_status.refit_countdown) }}
+  {{ ui.metric_card("선택 모델", snapshot.model_status.selected_model, "garch_forecast") }}
 </section>
-{{ ui.diagnostics_table("Residual Diagnostics", snapshot.diagnostics.model) }}
+{{ ui.diagnostics_table("잔차 진단", snapshot.diagnostics.model) }}
 {% endblock %}

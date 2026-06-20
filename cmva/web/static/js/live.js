@@ -1,28 +1,7 @@
 (function () {
-  const refreshablePaths = new Set([
-    "/",
-    "/setup",
-    "/overview",
-    "/dashboard",
-    "/data-quality",
-    "/model-lab",
-    "/current-market-state",
-    "/trend-seasonality",
-    "/diagnostics",
-    "/rolling-evaluation",
-    "/model-comparison",
-    "/markets",
-    "/volatility",
-    "/trend",
-    "/correlation-pca",
-    "/shock-regime",
-    "/models",
-    "/validation",
-  ]);
   let lastClosedTime = getLatestClosedTime(window.CMVA_SNAPSHOT);
   let lastModelJobKey = getModelJobKey(window.CMVA_SNAPSHOT);
   let reconnectTimer = null;
-  let reloadTimer = null;
 
   function getLatestClosedTime(snapshot) {
     return (
@@ -38,17 +17,45 @@
     element.textContent = value || "-";
   }
 
+  function statusKo(value) {
+    return (
+      {
+        LIVE: "실시간",
+        BOOTSTRAP: "부트스트랩",
+        DEGRADED: "제한 모드",
+        PAUSED: "일시정지",
+        connected: "연결됨",
+        connecting: "연결 중",
+        error: "오류",
+        idle: "대기",
+        loading_cache: "캐시 로드",
+        fetching: "데이터 수집",
+        storing: "저장 중",
+        computing: "계산 중",
+        ready: "준비됨",
+        degraded: "제한 모드",
+        complete: "완료",
+        no_data: "데이터 없음",
+        not_enough_data: "데이터 부족",
+        queued: "대기 중",
+        stage1_running: "1단계 실행 중",
+        stage2_running: "2단계 실행 중",
+        diagnostics_running: "진단 실행 중",
+      }[value] || value
+    );
+  }
+
   function updateStatus(snapshot) {
-    setText("live-mode", snapshot.mode);
-    setText("live-ws", snapshot.summary && snapshot.summary.websocket_status);
-    setText("live-bootstrap", snapshot.bootstrap_progress && snapshot.bootstrap_progress.phase);
+    setText("live-mode", statusKo(snapshot.mode));
+    setText("live-ws", statusKo(snapshot.summary && snapshot.summary.websocket_status));
+    setText("live-bootstrap", statusKo(snapshot.bootstrap_progress && snapshot.bootstrap_progress.phase));
   }
 
   function updateModelLabProgress(snapshot) {
     const status = snapshot && snapshot.model_lab && snapshot.model_lab.job_status;
     if (!status) return;
-    setText("model-lab-status", status.status);
-    setText("model-lab-stage", status.active_stage);
+    setText("model-lab-status", statusKo(status.status));
+    setText("model-lab-stage", statusKo(status.active_stage));
     setText("model-lab-target", status.active_target);
     setText("model-lab-candidate", status.active_candidate);
     setText("model-lab-completed-fits", status.completed_fits || 0);
@@ -112,13 +119,6 @@
       });
   }
 
-  function scheduleReload() {
-    if (!refreshablePaths.has(window.location.pathname) || reloadTimer) return;
-    reloadTimer = window.setTimeout(() => {
-      window.location.reload();
-    }, 300);
-  }
-
   function handleSnapshot(snapshot) {
     window.CMVA_SNAPSHOT = snapshot;
     updateStatus(snapshot);
@@ -132,7 +132,6 @@
     if (latestClosedTime && latestClosedTime !== lastClosedTime) {
       lastClosedTime = latestClosedTime;
       flashVisibleRows();
-      scheduleReload();
     }
     if (modelJobKey && modelJobKey !== lastModelJobKey) {
       lastModelJobKey = modelJobKey;
@@ -148,7 +147,7 @@
       try {
         handleSnapshot(JSON.parse(event.data));
       } catch (_error) {
-        setText("live-ws", "snapshot parse error");
+        setText("live-ws", "스냅샷 해석 오류");
       }
     };
     socket.onclose = () => {

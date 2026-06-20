@@ -7,12 +7,12 @@
       upgradeCanvasCharts();
       document.querySelectorAll(".echart.line-chart").forEach((element) => {
         const name = element.dataset.series;
-        drawEChart(element, series[name] || [], name || "series");
+        drawEChart(element, series[name] || [], koreanSeriesName(name || "series"));
       });
     } else {
       document.querySelectorAll("canvas.line-chart").forEach((canvas) => {
         const name = canvas.dataset.series;
-        drawLine(canvas, series[name] || [], name || "series");
+        drawLine(canvas, series[name] || [], koreanSeriesName(name || "series"));
       });
     }
   }
@@ -24,7 +24,7 @@
       div.dataset.series = canvas.dataset.series || "";
       div.dataset.metric = canvas.dataset.metric || "";
       div.setAttribute("role", "img");
-      div.setAttribute("aria-label", canvas.getAttribute("aria-label") || `${div.dataset.series} chart`);
+      div.setAttribute("aria-label", canvas.getAttribute("aria-label") || `${koreanSeriesName(div.dataset.series)} 차트`);
       canvas.replaceWith(div);
     });
   }
@@ -111,7 +111,7 @@
     ctx.fillText(label.replaceAll("_", " "), 12, 20);
     const values = rows.map((row) => Number(row.value)).filter((value) => Number.isFinite(value));
     if (values.length < 2) {
-      ctx.fillText("waiting for data", 12, 44);
+      ctx.fillText("데이터 대기 중", 12, 44);
       return;
     }
     const min = Math.min(...values);
@@ -142,7 +142,48 @@
       .find((row) => Number.isFinite(Number(row.value)));
     const latestText = latestRow && latestRow.label ? latestRow.label : values[values.length - 1].toExponential(3);
     ctx.fillStyle = "#667085";
-    ctx.fillText(`latest ${latestText}`, 12, height - 8);
+    ctx.fillText(`최신 ${latestText}`, 12, height - 8);
+  }
+
+  function koreanSeriesName(name) {
+    return (
+      {
+        basket_return: "바스켓 수익률",
+        market_vol: "시장 변동성",
+        ewma_vol: "EWMA 변동성",
+        range_vol: "범위 기반 변동성",
+        vol_percentile: "변동성 분위수",
+        vol_z_score: "변동성 Z-score",
+        vol_of_vol: "변동성의 변동성",
+        avg_pairwise_corr: "평균 쌍별 상관",
+        avg_btc_beta: "평균 BTC 베타",
+        pca1_share: "PCA1 비중",
+        dispersion: "분산도",
+        trend_slope: "추세 기울기",
+        trend_tstat: "추세 t-통계량",
+        trend_strength: "추세 강도",
+        trend_autocorr: "추세 자기상관",
+        up_down_ratio: "상승 캔들 비율",
+        forecast_vol: "예측 변동성",
+        standardized_residual: "표준화 잔차",
+        regime_state: "레짐 상태",
+        log_return: "로그 수익률",
+        log_price: "로그 가격",
+        shock_score: "쇼크 점수",
+        shock_breadth: "쇼크 폭",
+        rv_jump_ratio: "실현 변동성 점프 비율",
+        garch_qlike: "GARCH QLIKE",
+        ewma_qlike: "EWMA QLIKE",
+        naive_qlike: "Naive QLIKE",
+        garch_rmse_loss: "GARCH RMSE",
+        ewma_rmse_loss: "EWMA RMSE",
+        naive_rmse_loss: "Naive RMSE",
+        garch_mae_loss: "GARCH MAE",
+        ewma_mae_loss: "EWMA MAE",
+        naive_mae_loss: "Naive MAE",
+        series: "시계열",
+      }[name] || String(name || "series").replaceAll("_", " ")
+    );
   }
 
   window.renderCmvaCharts = renderCmvaCharts;

@@ -22,6 +22,8 @@ def test_web_routes_load_with_synthetic_snapshot(tmp_path, synthetic_candles):
 
     for path in [
         "/",
+        "/simulation/new",
+        "/simulations",
         "/setup",
         "/overview",
         "/data-quality",
@@ -51,26 +53,28 @@ def test_web_routes_render_distinct_pages(tmp_path, synthetic_candles):
     cmva.recompute(synthetic_candles(periods=120), force_refit=True)
     client = TestClient(create_web_app(cmva, start_background=False))
     expected_headings = {
-        "/": "Setup",
-        "/setup": "Setup",
-        "/overview": "Overview",
-        "/data-quality": "Data Quality",
-        "/model-lab": "Model Lab",
-        "/current-market-state": "Current Market State",
-        "/trend-seasonality": "Trend & Seasonality",
-        "/diagnostics": "Diagnostics",
-        "/rolling-evaluation": "Rolling Evaluation",
-        "/model-comparison": "Model Comparison",
-        "/markets": "Data Quality",
-        "/volatility": "Volatility",
-        "/trend": "Trend & Seasonality",
-        "/correlation-pca": "Correlation / PCA",
-        "/shock-regime": "Shock & Regime",
-        "/models": "Model Lab",
-        "/validation": "Rolling Evaluation",
-        "/methodology": "Methodology",
-        "/settings": "Settings",
-        "/logs": "Logs",
+        "/": "새 시뮬레이션",
+        "/simulation/new": "새 시뮬레이션",
+        "/simulations": "실행 중인 시뮬레이션",
+        "/setup": "초기 설정",
+        "/overview": "개요",
+        "/data-quality": "데이터 품질",
+        "/model-lab": "모델 실험실",
+        "/current-market-state": "현재 시장 상태",
+        "/trend-seasonality": "추세 및 계절성",
+        "/diagnostics": "진단",
+        "/rolling-evaluation": "롤링 평가",
+        "/model-comparison": "모델 비교",
+        "/markets": "데이터 품질",
+        "/volatility": "변동성",
+        "/trend": "추세 및 계절성",
+        "/correlation-pca": "상관 / PCA",
+        "/shock-regime": "쇼크 & 레짐",
+        "/models": "모델 실험실",
+        "/validation": "롤링 평가",
+        "/methodology": "방법론",
+        "/settings": "고급 설정",
+        "/logs": "로그",
     }
 
     for path, heading in expected_headings.items():
@@ -140,12 +144,12 @@ def test_markets_page_exposes_data_accumulation(tmp_path, synthetic_candles):
     response = client.get("/data-quality")
 
     assert response.status_code == 200
-    assert "Accumulation By Symbol" in response.text
-    assert "Forming Candle" in response.text
-    assert "Data Quality Issues" in response.text
-    assert "Research Dataset" in response.text
-    assert "Data To Validation Flow" in response.text
-    assert "Recent Accumulated Candles" in response.text
+    assert "심볼별 누적 현황" in response.text
+    assert "형성 중 캔들" in response.text
+    assert "데이터 품질 이슈" in response.text
+    assert "연구 데이터셋" in response.text
+    assert "데이터-검증 흐름" in response.text
+    assert "최근 누적 캔들" in response.text
     assert "BTCUSDT" in response.text
 
 
@@ -157,10 +161,10 @@ def test_model_evaluation_pages_expose_filter_controls(tmp_path, synthetic_candl
     rolling = client.get("/rolling-evaluation")
     comparison = client.get("/model-comparison")
 
-    assert "Evaluation Filters" in rolling.text
+    assert "평가 필터" in rolling.text
     assert "name=\"metric\"" in rolling.text
     assert "data-table-filter=\"#rolling-timeline-table\"" in rolling.text
-    assert "Leaderboard Filters" in comparison.text
+    assert "리더보드 필터" in comparison.text
     assert "data-table-filter=\"#model-comparison-table\"" in comparison.text
 
 

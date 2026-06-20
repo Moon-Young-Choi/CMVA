@@ -1,55 +1,55 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Settings{% endblock %}
-{% block heading %}Settings{% endblock %}
+{% block title %}CMVA 고급 설정{% endblock %}
+{% block heading %}고급 설정{% endblock %}
 {% block content %}
 <section class="panel">
   <form method="post" action="/settings" class="settings-form">
     <input type="hidden" name="next_path" value="/settings">
-    <label>Symbols <input name="symbols" value="{{ cmva.config.symbols | join(', ') }}"></label>
-    <label>{{ ui.help_label("Analysis Period", "analysis_period") }} <input name="analysis_period" value="{{ cmva.config.analysis_period }}"></label>
-    <label>{{ ui.help_label("Primary Interval", "closed_candle") }}
+    <label>심볼 <input name="symbols" value="{{ cmva.config.symbols | join(', ') }}"></label>
+    <label>{{ ui.help_label("분석 기간", "analysis_period") }} <input name="analysis_period" value="{{ cmva.config.analysis_period }}"></label>
+    <label>{{ ui.help_label("기본 캔들 간격", "closed_candle") }}
       <select name="interval">
         {% for interval in ["1m","3m","5m","15m","30m","1h","2h","4h","6h","8h","12h","1d","3d","1w","1M"] %}
         <option value="{{ interval }}" {{ "selected" if cmva.config.interval == interval else "" }}>{{ interval }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>{{ ui.help_label("Training Window", "training_window") }} <input name="training_window" value="{{ cmva.config.training_window }}"></label>
-    <label>{{ ui.help_label("Forecast Horizon Bars", "forecast_horizon") }} <input name="forecast_horizon_bars" type="number" min="1" value="{{ cmva.config.forecast_horizon_bars }}"></label>
-    <label>{{ ui.help_label("Refit Stride", "refit_stride") }} <input name="refit_stride_bars" type="number" min="1" value="{{ cmva.config.refit_stride_bars }}"></label>
-    <label>{{ ui.help_label("Search Mode", "two_stage_search") }}
+    <label>{{ ui.help_label("학습 구간", "training_window") }} <input name="training_window" value="{{ cmva.config.training_window }}"></label>
+    <label>{{ ui.help_label("예측 horizon bar 수", "forecast_horizon") }} <input name="forecast_horizon_bars" type="number" min="1" value="{{ cmva.config.forecast_horizon_bars }}"></label>
+    <label>{{ ui.help_label("재적합 간격", "refit_stride") }} <input name="refit_stride_bars" type="number" min="1" value="{{ cmva.config.refit_stride_bars }}"></label>
+    <label>{{ ui.help_label("탐색 모드", "two_stage_search") }}
       <select name="search_mode">
         {% for mode in ["two_stage", "fast", "detailed"] %}
         <option value="{{ mode }}" {{ "selected" if cmva.config.search_mode == mode else "" }}>{{ mode }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>{{ ui.help_label("Candidate Count", "candidate_count") }} <input name="candidate_model_count" type="number" min="1" value="{{ cmva.config.candidate_model_count }}"></label>
-    <label>{{ ui.help_label("Target View", "target_view") }}
+    <label>{{ ui.help_label("후보 모델 수", "candidate_count") }} <input name="candidate_model_count" type="number" min="1" value="{{ cmva.config.candidate_model_count }}"></label>
+    <label>{{ ui.help_label("대상 뷰", "target_view") }}
       <select name="target_view">
         {% for target in ["both", "log_return", "log_price"] %}
         <option value="{{ target }}" {{ "selected" if cmva.config.target_view == target else "" }}>{{ target }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>{{ ui.help_label("Candidate Groups", "candidate_groups") }} <input name="candidate_model_groups_csv" value="{{ cmva.config.candidate_model_groups | join(', ') }}"></label>
-    <label>{{ ui.help_label("Volatility Window", "realized_volatility") }} <input name="volatility_window" value="{{ cmva.config.volatility_window }}"></label>
-    <label>{{ ui.help_label("Correlation Window", "average_correlation") }} <input name="correlation_window" value="{{ cmva.config.correlation_window }}"></label>
-    <label>{{ ui.help_label("PCA Window", "pca1_share") }} <input name="pca_window" value="{{ cmva.config.pca_window }}"></label>
-    <label>{{ ui.help_label("Trend Window", "trend_slope") }} <input name="trend_window" value="{{ cmva.config.trend_window }}"></label>
-    <label>Regime Threshold Window <input name="regime_threshold_window" value="{{ cmva.config.regime_threshold_window }}"></label>
-    <label>Dashboard Range <input name="dashboard_time_range" value="{{ cmva.config.dashboard_time_range }}"></label>
-    <label>Forecast Range <input name="forecast_time_range" value="{{ cmva.config.forecast_time_range }}"></label>
-    <label>Backtest / Validation Range <input name="backtest_time_range" value="{{ cmva.config.backtest_time_range }}"></label>
-    <label>GARCH Refit Frequency <input name="garch_refit_frequency" type="number" min="1" value="{{ cmva.config.garch_refit_frequency }}"></label>
-    <label>Severe Shock Threshold <input name="severe_shock_threshold" value="{{ cmva.config.severe_shock_threshold }}"></label>
-    <label>Moderate Shock Threshold <input name="moderate_shock_threshold" value="{{ cmva.config.moderate_shock_threshold }}"></label>
-    <button type="submit">Apply Settings</button>
+    <label>{{ ui.help_label("후보 모델 그룹", "candidate_groups") }} <input name="candidate_model_groups_csv" value="{{ cmva.config.candidate_model_groups | join(', ') }}"></label>
+    <label>{{ ui.help_label("변동성 구간", "realized_volatility") }} <input name="volatility_window" value="{{ cmva.config.volatility_window }}"></label>
+    <label>{{ ui.help_label("상관 구간", "average_correlation") }} <input name="correlation_window" value="{{ cmva.config.correlation_window }}"></label>
+    <label>{{ ui.help_label("PCA 구간", "pca1_share") }} <input name="pca_window" value="{{ cmva.config.pca_window }}"></label>
+    <label>{{ ui.help_label("추세 구간", "trend_slope") }} <input name="trend_window" value="{{ cmva.config.trend_window }}"></label>
+    <label>레짐 임계 구간 <input name="regime_threshold_window" value="{{ cmva.config.regime_threshold_window }}"></label>
+    <label>대시보드 범위 <input name="dashboard_time_range" value="{{ cmva.config.dashboard_time_range }}"></label>
+    <label>예측 범위 <input name="forecast_time_range" value="{{ cmva.config.forecast_time_range }}"></label>
+    <label>백테스트 / 검증 범위 <input name="backtest_time_range" value="{{ cmva.config.backtest_time_range }}"></label>
+    <label>GARCH 재적합 빈도 <input name="garch_refit_frequency" type="number" min="1" value="{{ cmva.config.garch_refit_frequency }}"></label>
+    <label>심각한 쇼크 임계값 <input name="severe_shock_threshold" value="{{ cmva.config.severe_shock_threshold }}"></label>
+    <label>보통 쇼크 임계값 <input name="moderate_shock_threshold" value="{{ cmva.config.moderate_shock_threshold }}"></label>
+    <button type="submit">설정 적용</button>
   </form>
 </section>
 <section class="panel">
-  <h2>Current Bar Counts</h2>
+  <h2>현재 bar 변환</h2>
   <dl class="kv-list">
     {% for key, value in cmva.config.window_bar_counts.items() %}
     <div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>

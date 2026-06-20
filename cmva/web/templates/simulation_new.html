@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% from "_macros.html" import help_label %}
+
+{% block title %}새 시뮬레이션 - CMVA{% endblock %}
+{% block heading %}새 시뮬레이션{% endblock %}
+
+{% block content %}
+<form class="panel settings-form" method="post" action="/api/simulations">
+  <label>
+    실행명
+    <input name="run_name" required value="CMVA 변동성 시뮬레이션">
+  </label>
+  <label>
+    심볼
+    <input name="symbols" required value="{{ ', '.join(cmva.config.symbols) }}" placeholder="BTCUSDT, ETHUSDT">
+  </label>
+  <label>
+    캔들 간격
+    <select name="interval" required>
+      {% for interval in ["1m","3m","5m","15m","30m","1h","2h","4h","6h","8h","12h","1d","3d","1w","1M"] %}
+      <option value="{{ interval }}" {{ "selected" if interval == cmva.config.interval else "" }}>{{ interval }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    데이터 시작
+    <input name="data_start" type="datetime-local" required>
+  </label>
+  <label>
+    데이터 종료
+    <input name="data_end" type="datetime-local" required>
+  </label>
+  <label>
+    표시 시간대
+    <select name="timezone_display" required>
+      <option value="Asia/Seoul" selected>한국 시간</option>
+      <option value="UTC">UTC</option>
+    </select>
+  </label>
+  <label>
+    {{ help_label("T", "simulation_t") }}
+    <input name="T" required value="{{ cmva.config.training_window }}" placeholder="예: 24h, 30d, 120 bars">
+  </label>
+  <label>
+    {{ help_label("dT", "simulation_dt") }}
+    <input name="dT" required value="{{ cmva.config.refit_stride_bars }} bars" placeholder="예: 1h, 4 bars">
+  </label>
+  <label>
+    {{ help_label("S", "simulation_s") }}
+    <input name="S" required placeholder="필수 입력값">
+  </label>
+  <label>
+    S 역할
+    <select name="s_role" required>
+      <option value="scenario_count">시나리오 수</option>
+      <option value="initial_scale">초기 스케일</option>
+      <option value="simulation_horizon">시뮬레이션 구간</option>
+      <option value="custom">사용자 정의</option>
+    </select>
+  </label>
+  <label>
+    예측 horizon
+    <input name="forecast_horizon_bars" type="number" min="1" step="1" required value="{{ cmva.config.forecast_horizon_bars }}">
+  </label>
+  <label>
+    보정 구간
+    <input name="calibration_window" required value="30d">
+  </label>
+  <fieldset class="control-group">
+    <legend>후보 모델 그룹</legend>
+    {% for group, label in [("mean","평균"),("trend","추세"),("volatility","변동성"),("combined","결합")] %}
+    <label class="check-row">
+      <input type="checkbox" name="candidate_model_groups" value="{{ group }}" checked>
+      {{ label }}
+    </label>
+    {% endfor %}
+  </fieldset>
+  <label>
+    후보 모델 수
+    <input name="candidate_model_count" type="number" min="1" step="1" required value="{{ cmva.config.candidate_model_count }}">
+  </label>
+  <label>
+    탐색 모드
+    <select name="search_mode" required>
+      <option value="fast">빠름</option>
+      <option value="two_stage" selected>2단계</option>
+      <option value="detailed">상세</option>
+    </select>
+  </label>
+  <label>
+    대상 뷰
+    <select name="target_view" required>
+      <option value="log_return" selected>로그 수익률</option>
+      <option value="log_price">로그 가격</option>
+      <option value="both">둘 다</option>
+    </select>
+  </label>
+  <label>
+    점수화 방식
+    <select name="scoring_method" required>
+      <option value="bic_weighted_percentile" selected>BIC 가중 분위수</option>
+      <option value="aic_weighted_percentile">AIC 가중 분위수</option>
+      <option value="best_qlike_model">최저 QLIKE 모델</option>
+      <option value="equal_weighted">동일 가중</option>
+    </select>
+  </label>
+  <div>
+    <button type="submit">시뮬레이션 실행</button>
+  </div>
+</form>
+
+<section class="panel">
+  <h2>최근 실행</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>실행 ID</th>
+          <th>실행명</th>
+          <th>상태</th>
+          <th>심볼</th>
+          <th>캔들 간격</th>
+          <th>결과</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in simulation_runs[:8] %}
+        <tr>
+          <td><a href="/simulation/{{ run.run_id }}">{{ run.run_id }}</a></td>
+          <td>{{ run.run_name }}</td>
+          <td>{{ run.progress.status_label }}</td>
+          <td>{{ ", ".join(run.symbols) }}</td>
+          <td>{{ run.interval }}</td>
+          <td><a href="/results/{{ run.run_id }}">보기</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">아직 생성된 시뮬레이션이 없습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

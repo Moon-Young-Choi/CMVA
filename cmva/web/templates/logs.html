@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}CMVA Logs{% endblock %}
-{% block heading %}Logs{% endblock %}
+{% block title %}CMVA 로그{% endblock %}
+{% block heading %}로그{% endblock %}
 {% block content %}
 <section class="panel">
   <pre class="logs">{% for line in snapshot.logs %}{{ line }}
-{% else %}No logs yet.
+{% else %}아직 로그가 없습니다.
 {% endfor %}</pre>
 </section>
 {% endblock %}

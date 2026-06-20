@@ -1,7 +1,7 @@
 {% macro help_label(text, key) -%}
 <span class="metric-label">
   {{ text }}
-  <button class="help-tooltip" type="button" data-tooltip-key="{{ key }}" aria-label="Explain {{ text }}">?</button>
+  <button class="help-tooltip" type="button" data-tooltip-key="{{ key }}" aria-label="{{ text }} 설명">?</button>
 </span>
 {%- endmacro %}
 
@@ -19,11 +19,11 @@
     <table>
       <thead>
         <tr>
-          <th>Test</th>
-          <th>Formula</th>
-          <th>Statistic</th>
+          <th>검정</th>
+          <th>공식</th>
+          <th>통계량</th>
           <th>p-value</th>
-          <th>Decision</th>
+          <th>판정</th>
           <th>n</th>
         </tr>
       </thead>
@@ -38,7 +38,7 @@
           <td>{{ row.sample_size }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="6">No diagnostics yet.</td></tr>
+        <tr><td colspan="6">아직 진단 결과가 없습니다.</td></tr>
         {% endfor %}
       </tbody>
     </table>

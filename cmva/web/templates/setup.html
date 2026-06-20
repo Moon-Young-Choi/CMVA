@@ -1,32 +1,32 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Setup{% endblock %}
-{% block heading %}Setup{% endblock %}
+{% block title %}CMVA 초기 설정{% endblock %}
+{% block heading %}초기 설정{% endblock %}
 {% block content %}
 <section class="panel">
   <form method="post" action="/settings" class="settings-form">
     <input type="hidden" name="next_path" value="/setup">
-    <label>{{ ui.help_label("Symbols U", "symbols") }} <input name="symbols" value="{{ cmva.config.symbols | join(', ') }}"></label>
-    <label>{{ ui.help_label("Analysis Period T", "analysis_period") }} <input name="analysis_period" value="{{ cmva.config.analysis_period }}"></label>
-    <label>{{ ui.help_label("Candle Interval dT", "closed_candle") }}
+    <label>{{ ui.help_label("심볼 U", "symbols") }} <input name="symbols" value="{{ cmva.config.symbols | join(', ') }}"></label>
+    <label>{{ ui.help_label("분석 기간 T", "analysis_period") }} <input name="analysis_period" value="{{ cmva.config.analysis_period }}"></label>
+    <label>{{ ui.help_label("캔들 간격 dT", "closed_candle") }}
       <select name="interval">
         {% for interval in ["1m","3m","5m","15m","30m","1h","2h","4h","6h","8h","12h","1d","3d","1w","1M"] %}
         <option value="{{ interval }}" {{ "selected" if cmva.config.interval == interval else "" }}>{{ interval }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>{{ ui.help_label("Training Window S", "training_window") }} <input name="training_window" value="{{ cmva.config.training_window }}"></label>
-    <label>{{ ui.help_label("Forecast Horizon H", "forecast_horizon") }} <input name="forecast_horizon_bars" type="number" min="1" value="{{ cmva.config.forecast_horizon_bars }}"></label>
-    <label>{{ ui.help_label("Refit Stride R", "refit_stride") }} <input name="refit_stride_bars" type="number" min="1" value="{{ cmva.config.refit_stride_bars }}"></label>
-    <label>{{ ui.help_label("Search Mode", "two_stage_search") }}
+    <label>{{ ui.help_label("학습 구간 S", "training_window") }} <input name="training_window" value="{{ cmva.config.training_window }}"></label>
+    <label>{{ ui.help_label("예측 horizon H", "forecast_horizon") }} <input name="forecast_horizon_bars" type="number" min="1" value="{{ cmva.config.forecast_horizon_bars }}"></label>
+    <label>{{ ui.help_label("재적합 간격 R", "refit_stride") }} <input name="refit_stride_bars" type="number" min="1" value="{{ cmva.config.refit_stride_bars }}"></label>
+    <label>{{ ui.help_label("탐색 모드", "two_stage_search") }}
       <select name="search_mode">
         {% for mode in ["two_stage", "fast", "detailed"] %}
         <option value="{{ mode }}" {{ "selected" if cmva.config.search_mode == mode else "" }}>{{ mode }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>{{ ui.help_label("Candidate Count", "candidate_count") }} <input name="candidate_model_count" type="number" min="1" max="40" value="{{ cmva.config.candidate_model_count }}"></label>
-    <label>{{ ui.help_label("Target View", "target_view") }}
+    <label>{{ ui.help_label("후보 모델 수", "candidate_count") }} <input name="candidate_model_count" type="number" min="1" max="40" value="{{ cmva.config.candidate_model_count }}"></label>
+    <label>{{ ui.help_label("대상 뷰", "target_view") }}
       <select name="target_view">
         {% for target in ["both", "log_return", "log_price"] %}
         <option value="{{ target }}" {{ "selected" if cmva.config.target_view == target else "" }}>{{ target }}</option>
@@ -34,40 +34,40 @@
       </select>
     </label>
     <fieldset class="control-group">
-      <legend>{{ ui.help_label("Candidate Groups", "candidate_groups") }}</legend>
+      <legend>{{ ui.help_label("후보 모델 그룹", "candidate_groups") }}</legend>
       {% for group in ["mean", "trend", "volatility", "combined"] %}
       <label class="check-row"><input type="checkbox" name="candidate_model_groups" value="{{ group }}" {{ "checked" if group in cmva.config.candidate_model_groups else "" }}> {{ group }}</label>
       {% endfor %}
     </fieldset>
-    <button type="submit">Apply</button>
+    <button type="submit">적용</button>
   </form>
 </section>
 
 <section class="grid metrics">
-  {{ ui.metric_card("Rolling Origins", snapshot.setup_estimate.rolling_origins, "rolling_origin") }}
-  {{ ui.metric_card("Candidate Specs", snapshot.setup_estimate.candidate_specs, "candidate_count") }}
-  {{ ui.metric_card("Stage 1 Fits", snapshot.setup_estimate.stage1_fits, "two_stage_search") }}
-  {{ ui.metric_card("Stage 2 Fits", snapshot.setup_estimate.stage2_fits, "two_stage_search") }}
-  {{ ui.metric_card("Estimated Fits", snapshot.setup_estimate.estimated_total_fits, "two_stage_search") }}
-  {{ ui.metric_card("Estimated Runtime", snapshot.setup_estimate.estimated_runtime, "fit_time") }}
-  {{ ui.metric_card("Memory Estimate", snapshot.setup_estimate.memory_estimate) }}
-  {{ ui.metric_card("C++ Backend", snapshot.cpp_backend.active, "cpp_backend") }}
+  {{ ui.metric_card("롤링 origin", snapshot.setup_estimate.rolling_origins, "rolling_origin") }}
+  {{ ui.metric_card("후보 명세 수", snapshot.setup_estimate.candidate_specs, "candidate_count") }}
+  {{ ui.metric_card("1단계 적합 수", snapshot.setup_estimate.stage1_fits, "two_stage_search") }}
+  {{ ui.metric_card("2단계 적합 수", snapshot.setup_estimate.stage2_fits, "two_stage_search") }}
+  {{ ui.metric_card("예상 적합 수", snapshot.setup_estimate.estimated_total_fits, "two_stage_search") }}
+  {{ ui.metric_card("예상 실행 시간", snapshot.setup_estimate.estimated_runtime, "fit_time") }}
+  {{ ui.metric_card("메모리 추정", snapshot.setup_estimate.memory_estimate) }}
+  {{ ui.metric_card("C++ 백엔드", snapshot.cpp_backend.active, "cpp_backend") }}
 </section>
 
 <section class="panel">
-  <h2>Window Conversion</h2>
+  <h2>구간 변환</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Control</th><th>Duration</th><th>Bars</th><th>Interval</th></tr></thead>
+      <thead><tr><th>항목</th><th>기간</th><th>bar 수</th><th>간격</th></tr></thead>
       <tbody>
-        <tr><td>Training Window S</td><td>{{ cmva.config.training_window }}</td><td>{{ snapshot.setup_estimate.training_window_bars }}</td><td>{{ cmva.config.interval }}</td></tr>
-        <tr><td>Volatility Window</td><td>{{ cmva.config.volatility_window }}</td><td>{{ snapshot.summary.window_bar_counts.volatility_window }}</td><td>{{ cmva.config.interval }}</td></tr>
-        <tr><td>Correlation Window</td><td>{{ cmva.config.correlation_window }}</td><td>{{ snapshot.summary.window_bar_counts.correlation_window }}</td><td>{{ cmva.config.interval }}</td></tr>
-        <tr><td>PCA Window</td><td>{{ cmva.config.pca_window }}</td><td>{{ snapshot.summary.window_bar_counts.pca_window }}</td><td>{{ cmva.config.interval }}</td></tr>
-        <tr><td>Trend Window</td><td>{{ cmva.config.trend_window }}</td><td>{{ snapshot.summary.window_bar_counts.trend_window }}</td><td>{{ cmva.config.interval }}</td></tr>
-        <tr><td>Regime Threshold Window</td><td>{{ cmva.config.regime_threshold_window }}</td><td>{{ snapshot.summary.window_bar_counts.regime_threshold_window }}</td><td>{{ cmva.config.interval }}</td></tr>
-        <tr><td>Forecast Horizon H</td><td>{{ snapshot.summary.forecast_horizon }}</td><td>{{ snapshot.setup_estimate.forecast_horizon_bars }}</td><td>{{ cmva.config.interval }}</td></tr>
-        <tr><td>Refit Stride R</td><td>{{ snapshot.setup_estimate.refit_stride_bars }} bars</td><td>{{ snapshot.setup_estimate.refit_stride_bars }}</td><td>{{ cmva.config.interval }}</td></tr>
+        <tr><td>학습 구간 S</td><td>{{ cmva.config.training_window }}</td><td>{{ snapshot.setup_estimate.training_window_bars }}</td><td>{{ cmva.config.interval }}</td></tr>
+        <tr><td>변동성 구간</td><td>{{ cmva.config.volatility_window }}</td><td>{{ snapshot.summary.window_bar_counts.volatility_window }}</td><td>{{ cmva.config.interval }}</td></tr>
+        <tr><td>상관 구간</td><td>{{ cmva.config.correlation_window }}</td><td>{{ snapshot.summary.window_bar_counts.correlation_window }}</td><td>{{ cmva.config.interval }}</td></tr>
+        <tr><td>PCA 구간</td><td>{{ cmva.config.pca_window }}</td><td>{{ snapshot.summary.window_bar_counts.pca_window }}</td><td>{{ cmva.config.interval }}</td></tr>
+        <tr><td>추세 구간</td><td>{{ cmva.config.trend_window }}</td><td>{{ snapshot.summary.window_bar_counts.trend_window }}</td><td>{{ cmva.config.interval }}</td></tr>
+        <tr><td>레짐 임계 구간</td><td>{{ cmva.config.regime_threshold_window }}</td><td>{{ snapshot.summary.window_bar_counts.regime_threshold_window }}</td><td>{{ cmva.config.interval }}</td></tr>
+        <tr><td>예측 horizon H</td><td>{{ snapshot.summary.forecast_horizon }}</td><td>{{ snapshot.setup_estimate.forecast_horizon_bars }}</td><td>{{ cmva.config.interval }}</td></tr>
+        <tr><td>재적합 간격 R</td><td>{{ snapshot.setup_estimate.refit_stride_bars }} bars</td><td>{{ snapshot.setup_estimate.refit_stride_bars }}</td><td>{{ cmva.config.interval }}</td></tr>
       </tbody>
     </table>
   </div>

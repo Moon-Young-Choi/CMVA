@@ -74,6 +74,6 @@ def test_diagnostics_page_renders_structured_results(tmp_path, synthetic_candles
     response = client.get("/diagnostics")
 
     assert response.status_code == 200
-    assert "Model Diagnostics" in response.text
+    assert "모델 진단" in response.text
     assert "p-value" in response.text
-    assert "Decision" in response.text
+    assert "판정" in response.text

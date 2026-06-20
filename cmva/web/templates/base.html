@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,39 +11,39 @@
   <aside class="sidebar">
     <a class="brand" href="/">
       <strong>CMVA</strong>
-      <span>Quant Model Lab</span>
+      <span>암호화폐 변동성 분석</span>
     </a>
     <nav>
-      <a class="{{ 'active' if page == 'setup' else '' }}" href="/setup">Setup</a>
-      <a class="{{ 'active' if page == 'overview' else '' }}" href="/overview">Overview</a>
-      <a class="{{ 'active' if page == 'data_quality' else '' }}" href="/data-quality">Data Quality</a>
-      <a class="{{ 'active' if page == 'model_lab' else '' }}" href="/model-lab">Model Lab</a>
-      <a class="{{ 'active' if page == 'current_market_state' else '' }}" href="/current-market-state">Current Market State</a>
-      <a class="{{ 'active' if page == 'trend_seasonality' else '' }}" href="/trend-seasonality">Trend & Seasonality</a>
-      <a class="{{ 'active' if page == 'volatility' else '' }}" href="/volatility">Volatility</a>
-      <a class="{{ 'active' if page == 'diagnostics' else '' }}" href="/diagnostics">Diagnostics</a>
-      <a class="{{ 'active' if page == 'rolling_evaluation' else '' }}" href="/rolling-evaluation">Rolling Evaluation</a>
-      <a class="{{ 'active' if page == 'model_comparison' else '' }}" href="/model-comparison">Model Comparison</a>
-      <a class="{{ 'active' if page == 'settings' else '' }}" href="/settings">Settings</a>
-      <a class="{{ 'active' if page == 'logs' else '' }}" href="/logs">Logs</a>
+      <a class="{{ 'active' if page == 'simulation_new' else '' }}" href="/simulation/new">새 시뮬레이션</a>
+      <a class="{{ 'active' if page == 'simulations' or page == 'simulation_run' else '' }}" href="/simulations">실행 중인 시뮬레이션</a>
+      <a class="{{ 'active' if page == 'simulation_results' else '' }}" href="/simulations#results">시뮬레이션 결과</a>
+      <a class="{{ 'active' if page == 'data_quality' else '' }}" href="/data-quality">데이터 품질</a>
+      <a class="{{ 'active' if page == 'model_lab' else '' }}" href="/model-lab">모델 실험실</a>
+      <a class="{{ 'active' if page == 'volatility' else '' }}" href="/volatility">변동성</a>
+      <a class="{{ 'active' if page == 'trend_seasonality' else '' }}" href="/trend-seasonality">추세 및 계절성</a>
+      <a class="{{ 'active' if page == 'diagnostics' else '' }}" href="/diagnostics">진단</a>
+      <a class="{{ 'active' if page == 'logs' else '' }}" href="/logs">로그</a>
+      <a class="{{ 'active' if page == 'settings' else '' }}" href="/settings">고급 설정</a>
     </nav>
   </aside>
   <main class="content">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Public Binance Spot data only</p>
+        <p class="eyebrow">공개 Binance Spot 데이터만 사용</p>
         <h1>{% block heading %}CMVA{% endblock %}</h1>
       </div>
       <div class="run-status">
-        <span id="live-mode">{{ snapshot.mode }}</span>
-        <span id="live-ws">{{ snapshot.summary.websocket_status }}</span>
-        <span id="live-bootstrap">{{ snapshot.bootstrap_progress.phase or "idle" }}</span>
+        {% set status_labels = {"LIVE":"실시간", "BOOTSTRAP":"부트스트랩", "DEGRADED":"제한 모드", "PAUSED":"일시정지", "connected":"연결됨", "connecting":"연결 중", "error":"오류", "idle":"대기", "loading_cache":"캐시 로드", "fetching":"데이터 수집", "storing":"저장 중", "computing":"계산 중", "ready":"준비됨", "degraded":"제한 모드"} %}
+        <span id="live-mode">{{ status_labels.get(snapshot.mode, snapshot.mode) }}</span>
+        <span id="live-ws">{{ status_labels.get(snapshot.summary.websocket_status, snapshot.summary.websocket_status) }}</span>
+        <span id="live-bootstrap">{{ status_labels.get(snapshot.bootstrap_progress.phase or "idle", snapshot.bootstrap_progress.phase or "대기") }}</span>
       </div>
     </header>
     {% block content %}{% endblock %}
   </main>
   <div id="tooltip-layer" role="tooltip" hidden></div>
   <script>
+    window.CMVA_SNAPSHOT = {{ snapshot | tojson }};
     window.CMVA_GLOSSARY = {{ glossary | tojson }};
   </script>
   <script src="{{ url_for('static', path='/js/tooltip.js') }}"></script>

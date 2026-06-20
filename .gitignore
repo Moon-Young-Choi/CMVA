@@ -15,6 +15,7 @@ data/features/
 data/models/
 data/backtests/
 data/validation/
+data/simulations/
 reports/
 logs/
 cmva.log

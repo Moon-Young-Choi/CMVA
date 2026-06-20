@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Trend{% endblock %}
-{% block heading %}Trend{% endblock %}
+{% block title %}CMVA 추세{% endblock %}
+{% block heading %}추세{% endblock %}
 {% block content %}
 <section class="grid metrics">
-  {{ ui.metric_card("Trend Slope", snapshot.latest_features.trend_slope, "trend_slope") }}
-  {{ ui.metric_card("Trend T-stat", snapshot.latest_features.trend_tstat, "trend_tstat") }}
-  {{ ui.metric_card("Trend Strength", snapshot.latest_features.trend_strength, "trend_slope") }}
-  {{ ui.metric_card("Rolling Autocorrelation", snapshot.latest_features.trend_autocorr, "trend_slope") }}
-  {{ ui.metric_card("Up Candle Ratio", snapshot.latest_features.up_down_ratio, "trend_slope") }}
+  {{ ui.metric_card("추세 기울기", snapshot.latest_features.trend_slope, "trend_slope") }}
+  {{ ui.metric_card("추세 t-통계량", snapshot.latest_features.trend_tstat, "trend_tstat") }}
+  {{ ui.metric_card("추세 강도", snapshot.latest_features.trend_strength, "trend_slope") }}
+  {{ ui.metric_card("롤링 자기상관", snapshot.latest_features.trend_autocorr, "trend_slope") }}
+  {{ ui.metric_card("상승 캔들 비율", snapshot.latest_features.up_down_ratio, "trend_slope") }}
 </section>
 <section class="panel">
-  <h2>Trend Timelines</h2>
+  <h2>추세 타임라인</h2>
   <div class="chart-grid">
     <canvas class="line-chart" data-series="trend_strength"></canvas>
     <canvas class="line-chart" data-series="trend_slope"></canvas>

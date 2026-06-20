@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Diagnostics{% endblock %}
-{% block heading %}Diagnostics{% endblock %}
+{% block title %}CMVA 진단{% endblock %}
+{% block heading %}진단{% endblock %}
 {% block content %}
-{{ ui.diagnostics_table("Model Diagnostics", snapshot.diagnostics.model) }}
-{{ ui.diagnostics_table("Forecast Diagnostics", snapshot.diagnostics.forecast) }}
-{{ ui.diagnostics_table("Risk Diagnostics", snapshot.diagnostics.risk) }}
-{{ ui.diagnostics_table("Validation Diagnostics", snapshot.diagnostics.validation) }}
-{{ ui.diagnostics_table("Regime Diagnostics", snapshot.diagnostics.regime) }}
+{{ ui.diagnostics_table("모델 진단", snapshot.diagnostics.model) }}
+{{ ui.diagnostics_table("예측 진단", snapshot.diagnostics.forecast) }}
+{{ ui.diagnostics_table("위험 진단", snapshot.diagnostics.risk) }}
+{{ ui.diagnostics_table("검증 진단", snapshot.diagnostics.validation) }}
+{{ ui.diagnostics_table("레짐 진단", snapshot.diagnostics.regime) }}
 {% endblock %}

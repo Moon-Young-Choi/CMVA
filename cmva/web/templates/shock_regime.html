@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Shock Regime{% endblock %}
-{% block heading %}Shock & Regime{% endblock %}
+{% block title %}CMVA 쇼크 & 레짐{% endblock %}
+{% block heading %}쇼크 & 레짐{% endblock %}
 {% block content %}
 <section class="grid metrics">
-  {{ ui.metric_card("Shock Label", snapshot.summary.current_shock_type, "shock_score") }}
-  {{ ui.metric_card("Shock Score", snapshot.latest_shock.shock_score, "shock_score") }}
-  {{ ui.metric_card("Shock Breadth", snapshot.latest_shock.shock_breadth, "shock_breadth") }}
-  {{ ui.metric_card("Vol Jump Ratio", snapshot.latest_shock.rv_jump_ratio, "volatility") }}
-  {{ ui.metric_card("Regime", snapshot.summary.current_regime) }}
+  {{ ui.metric_card("쇼크 라벨", snapshot.summary.current_shock_type, "shock_score") }}
+  {{ ui.metric_card("쇼크 점수", snapshot.latest_shock.shock_score, "shock_score") }}
+  {{ ui.metric_card("쇼크 폭", snapshot.latest_shock.shock_breadth, "shock_breadth") }}
+  {{ ui.metric_card("변동성 점프 비율", snapshot.latest_shock.rv_jump_ratio, "volatility") }}
+  {{ ui.metric_card("레짐", snapshot.summary.current_regime) }}
 </section>
 <section class="panel">
-  <h2>Shock Timelines</h2>
+  <h2>쇼크 타임라인</h2>
   <div class="chart-grid">
     <canvas class="line-chart" data-series="shock_score"></canvas>
     <canvas class="line-chart" data-series="shock_breadth"></canvas>

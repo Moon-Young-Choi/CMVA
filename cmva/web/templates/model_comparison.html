@@ -1,37 +1,37 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Model Comparison{% endblock %}
-{% block heading %}Model Comparison{% endblock %}
+{% block title %}CMVA 모델 비교{% endblock %}
+{% block heading %}모델 비교{% endblock %}
 {% block content %}
 <section class="panel">
-  <h2>Leaderboard Filters</h2>
+  <h2>리더보드 필터</h2>
   <form class="filter-bar js-table-filter" data-table-filter="#model-comparison-table">
-    <label>Family
+    <label>계열
       <select name="family">
-        <option value="">All</option>
-        <option value="mean">Mean</option>
-        <option value="trend">Trend</option>
-        <option value="volatility">Volatility</option>
-        <option value="combined">Combined</option>
+        <option value="">전체</option>
+        <option value="mean">평균</option>
+        <option value="trend">추세</option>
+        <option value="volatility">변동성</option>
+        <option value="combined">결합</option>
       </select>
     </label>
-    <label>Target
+    <label>대상
       <select name="target">
-        <option value="">All</option>
-        <option value="log_return">Log Return</option>
-        <option value="log_price">Log Price</option>
+        <option value="">전체</option>
+        <option value="log_return">로그 수익률</option>
+        <option value="log_price">로그 가격</option>
       </select>
     </label>
-    <label>Top N
+    <label>상위 N
       <input name="top_n" type="number" min="1" max="50" value="10">
     </label>
   </form>
 </section>
 <section class="panel">
-  <h2>Leaderboard</h2>
+  <h2>리더보드</h2>
   <div class="table-wrap">
     <table id="model-comparison-table">
-      <thead><tr><th>Rank</th><th>Model ID</th><th>Family</th><th>Target</th><th>AIC Rank</th><th>BIC Rank</th><th>HQIC Rank</th><th>QLIKE Rank</th><th>RMSE</th><th>MAE</th><th>Convergence</th><th>Fit Time</th><th>Rank Stability</th><th>Latest Rank</th></tr></thead>
+      <thead><tr><th>순위</th><th>모델 ID</th><th>계열</th><th>대상</th><th>AIC 순위</th><th>BIC 순위</th><th>HQIC 순위</th><th>QLIKE 순위</th><th>RMSE</th><th>MAE</th><th>수렴</th><th>적합 시간</th><th>순위 안정성</th><th>최신 순위</th></tr></thead>
       <tbody>
       {% for row in snapshot.model_lab.leaderboard %}
         <tr data-family="{{ row.family }}" data-target="{{ row.target }}" data-rank="{{ row.rank }}">
@@ -40,7 +40,7 @@
           <td>{{ row.avg_rmse }}</td><td>{{ row.avg_mae }}</td><td>{{ row.converged }}</td><td>{{ row.fit_time_ms }}</td><td>{{ row.rank_stability }}</td><td>{{ row.rank }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="14">No leaderboard yet.</td></tr>
+        <tr><td colspan="14">아직 리더보드가 없습니다.</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -11,10 +11,10 @@ from cmva.engine.interval import bars_for_duration, latest_closed_open_time, nor
 def test_default_interval_and_duration_windows_convert_to_bars():
     config = CMVAConfig()
 
-    assert config.interval == "1h"
-    assert config.forecast_horizon == "1 bar = next 1 hour"
-    assert config.window_bar_counts["volatility_window"] == 24
-    assert config.window_bar_counts["correlation_window"] == 7 * 24
+    assert config.interval == "15m"
+    assert config.forecast_horizon == "1 bar = next 15 minutes"
+    assert config.window_bar_counts["volatility_window"] == 96
+    assert config.window_bar_counts["correlation_window"] == 7 * 24 * 4
 
 
 @pytest.mark.parametrize(

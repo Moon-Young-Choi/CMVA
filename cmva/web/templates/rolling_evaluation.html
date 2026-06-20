@@ -1,70 +1,70 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Rolling Evaluation{% endblock %}
-{% block heading %}Rolling Evaluation{% endblock %}
+{% block title %}CMVA 롤링 평가{% endblock %}
+{% block heading %}롤링 평가{% endblock %}
 {% block content %}
 <section class="grid metrics">
-  {{ ui.metric_card("Validation Observations", snapshot.validation.validation_observations, "walk_forward") }}
-  {{ ui.metric_card("Best QLIKE Model", snapshot.validation.best_qlike_model, "qlike") }}
-  {{ ui.metric_card("Stage 2 Candidates", snapshot.model_lab.summary.stage2_candidates, "two_stage_search") }}
-  {{ ui.metric_card("Selected Model", snapshot.model_lab.summary.selected_model, "model_candidate") }}
+  {{ ui.metric_card("검증 관측치", snapshot.validation.validation_observations, "walk_forward") }}
+  {{ ui.metric_card("최저 QLIKE 모델", snapshot.validation.best_qlike_model, "qlike") }}
+  {{ ui.metric_card("2단계 후보", snapshot.model_lab.summary.stage2_candidates, "two_stage_search") }}
+  {{ ui.metric_card("선택 모델", snapshot.model_lab.summary.selected_model, "model_candidate") }}
 </section>
 <section class="panel">
-  <h2>Evaluation Filters</h2>
+  <h2>평가 필터</h2>
   <form class="filter-bar js-table-filter js-metric-filter" data-table-filter="#rolling-timeline-table">
-    <label>Symbol
+    <label>심볼
       <select name="symbol">
-        <option value="">All</option>
+        <option value="">전체</option>
         <option value="basket">Basket</option>
       </select>
     </label>
-    <label>Metric
+    <label>지표
       <select name="metric">
         <option value="qlike">QLIKE</option>
         <option value="rmse">RMSE</option>
         <option value="mae">MAE</option>
       </select>
     </label>
-    <label>Family
+    <label>계열
       <select name="family">
-        <option value="">All</option>
-        <option value="mean">Mean</option>
-        <option value="trend">Trend</option>
-        <option value="volatility">Volatility</option>
-        <option value="combined">Combined</option>
+        <option value="">전체</option>
+        <option value="mean">평균</option>
+        <option value="trend">추세</option>
+        <option value="volatility">변동성</option>
+        <option value="combined">결합</option>
       </select>
     </label>
-    <label>Target
+    <label>대상
       <select name="target">
-        <option value="">All</option>
-        <option value="log_return">Log Return</option>
-        <option value="log_price">Log Price</option>
+        <option value="">전체</option>
+        <option value="log_return">로그 수익률</option>
+        <option value="log_price">로그 가격</option>
       </select>
     </label>
-    <label>Top N
+    <label>상위 N
       <input name="top_n" type="number" min="1" max="50" value="10">
     </label>
   </form>
 </section>
 <section class="panel">
-  <h2>AIC / BIC / HQIC Timelines</h2>
+  <h2>AIC / BIC / HQIC 타임라인</h2>
   <div class="table-wrap">
     <table id="rolling-timeline-table">
-      <thead><tr><th>Origin</th><th>Realization</th><th>Model</th><th>AIC</th><th>BIC</th><th>HQIC</th><th>Rank</th></tr></thead>
+      <thead><tr><th>origin</th><th>실현 시각</th><th>모델</th><th>AIC</th><th>BIC</th><th>HQIC</th><th>순위</th></tr></thead>
       <tbody>
       {% for row in snapshot.model_lab.timelines[-80:] %}
         <tr data-symbol="basket" data-family="{{ row.family }}" data-target="{{ row.target }}" data-rank="{{ row.rank }}">
           <td>{{ row.origin_time }}</td><td>{{ row.realization_time }}</td><td>{{ row.model_id }}</td><td>{{ row.aic }}</td><td>{{ row.bic }}</td><td>{{ row.hqic }}</td><td>{{ row.rank }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="7">No rolling timeline yet.</td></tr>
+        <tr><td colspan="7">아직 롤링 타임라인이 없습니다.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
 <section class="panel">
-  <h2>QLIKE / RMSE / MAE Timelines</h2>
+  <h2>QLIKE / RMSE / MAE 타임라인</h2>
   <div class="chart-grid">
     <canvas class="line-chart" data-metric="qlike" data-series="garch_qlike"></canvas>
     <canvas class="line-chart" data-metric="qlike" data-series="ewma_qlike"></canvas>
@@ -78,7 +78,7 @@
   </div>
 </section>
 <section class="panel">
-  <h2>Model Rank Heatmap</h2>
+  <h2>모델 순위 히트맵</h2>
   <div class="table-wrap">
     <table>
       <tbody>
@@ -89,7 +89,7 @@
         {% endfor %}
         </tr>
       {% else %}
-        <tr><td>No rank heatmap yet.</td></tr>
+        <tr><td>아직 순위 히트맵이 없습니다.</td></tr>
       {% endfor %}
       </tbody>
     </table>

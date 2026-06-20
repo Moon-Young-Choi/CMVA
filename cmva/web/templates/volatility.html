@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}CMVA Volatility{% endblock %}
-{% block heading %}Volatility{% endblock %}
+{% block title %}CMVA 변동성{% endblock %}
+{% block heading %}변동성{% endblock %}
 {% block content %}
 <section class="grid metrics">
-  {{ ui.metric_card("Realized Volatility", snapshot.latest_features.market_vol, "realized_volatility") }}
-  {{ ui.metric_card("EWMA Volatility", snapshot.latest_features.ewma_vol, "ewma") }}
-  {{ ui.metric_card("GARCH Forecast", snapshot.summary.forecast_vol, "garch_forecast") }}
-  {{ ui.metric_card("Range Volatility", snapshot.latest_features.range_vol, "range_volatility") }}
-  {{ ui.metric_card("Vol Percentile", snapshot.latest_features.vol_percentile, "volatility") }}
-  {{ ui.metric_card("Vol Z-score", snapshot.latest_features.vol_z_score, "volatility") }}
-  {{ ui.metric_card("Vol of Vol", snapshot.latest_features.vol_of_vol, "volatility") }}
-  {{ ui.metric_card("Shock Score", snapshot.latest_shock.shock_score, "shock_score") }}
+  {{ ui.metric_card("실현 변동성", snapshot.latest_features.market_vol, "realized_volatility") }}
+  {{ ui.metric_card("EWMA 변동성", snapshot.latest_features.ewma_vol, "ewma") }}
+  {{ ui.metric_card("GARCH 예측", snapshot.summary.forecast_vol, "garch_forecast") }}
+  {{ ui.metric_card("범위 기반 변동성", snapshot.latest_features.range_vol, "range_volatility") }}
+  {{ ui.metric_card("변동성 분위수", snapshot.latest_features.vol_percentile, "volatility") }}
+  {{ ui.metric_card("변동성 Z-score", snapshot.latest_features.vol_z_score, "volatility") }}
+  {{ ui.metric_card("변동성의 변동성", snapshot.latest_features.vol_of_vol, "volatility") }}
+  {{ ui.metric_card("쇼크 점수", snapshot.latest_shock.shock_score, "shock_score") }}
 </section>
 <section class="panel">
-  <h2>Forecast vs Realized Volatility</h2>
+  <h2>예측 변동성 vs 실현 변동성</h2>
   <div class="chart-grid">
     <canvas class="line-chart" data-series="forecast_vol"></canvas>
     <canvas class="line-chart" data-series="market_vol"></canvas>

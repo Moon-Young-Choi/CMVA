@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Current Market State{% endblock %}
+{% block heading %}Current Market State{% endblock %}
+{% block content %}
+<section class="grid metrics">
+  {{ ui.metric_card("Best Current Mean Model", snapshot.model_lab.current_state.best_current_model, "model_candidate") }}
+  {{ ui.metric_card("Best Current Volatility Model", snapshot.model_status.basket_forecast_model, "garch_forecast") }}
+  {{ ui.metric_card("Trend Evidence", snapshot.latest_features.trend_tstat, "trend_tstat") }}
+  {{ ui.metric_card("Seasonality Evidence", snapshot.model_lab.selected.family, "seasonality") }}
+  {{ ui.metric_card("Volatility Clustering", snapshot.diagnostics.model[0].decision if snapshot.diagnostics.model else "-", "arch_lm") }}
+  {{ ui.metric_card("Residual Autocorrelation", snapshot.diagnostics.model[1].decision if snapshot.diagnostics.model|length > 1 else "-", "ljung_box") }}
+  {{ ui.metric_card("Model Uncertainty", snapshot.model_lab.current_state.model_uncertainty, "model_uncertainty") }}
+  {{ ui.metric_card("Latest Closed Candle", snapshot.summary.latest_closed_time, "closed_candle") }}
+  {{ ui.metric_card("Data Quality", snapshot.data_quality.status, "validation_issue") }}
+  {{ ui.metric_card("Current Regime", snapshot.summary.current_regime, "regime_label") }}
+  {{ ui.metric_card("Current Shock", snapshot.summary.current_shock_type, "shock_score") }}
+</section>
+<section class="panel">
+  <h2>Latest Market Rows</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Symbol</th><th>Open Time</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th></tr></thead>
+      <tbody>
+      {% for row in snapshot.market_rows %}
+        <tr><td>{{ row.symbol }}</td><td>{{ row.open_time }}</td><td>{{ row.open }}</td><td>{{ row.high }}</td><td>{{ row.low }}</td><td>{{ row.close }}</td><td>{{ row.volume }}</td></tr>
+      {% else %}
+        <tr><td colspan="7">No closed candles loaded yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

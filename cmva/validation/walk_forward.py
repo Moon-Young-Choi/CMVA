@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+
+from cmva.native.backend import backend
 
 
 @dataclass
@@ -57,14 +58,21 @@ def run_walk_forward_validation(
     for model in ("garch", "ewma", "naive"):
         forecast_variance = aligned[model].pow(2)
         error = realized_variance - forecast_variance
-        qlike = _qlike(realized_variance, forecast_variance)
+        qlike = pd.Series(
+            backend.qlike(realized_variance.to_numpy(dtype=float), forecast_variance.to_numpy(dtype=float)),
+            index=aligned.index,
+            name="qlike",
+        )
         loss_columns[f"{model}_squared_error"] = error.pow(2)
         loss_columns[f"{model}_absolute_error"] = error.abs()
         loss_columns[f"{model}_qlike"] = qlike
-        metrics[f"{model}_rmse"] = float(math.sqrt(error.pow(2).mean()))
-        metrics[f"{model}_mae"] = float(error.abs().mean())
+        metrics[f"{model}_rmse"] = backend.rmse(realized_variance.to_numpy(dtype=float), forecast_variance.to_numpy(dtype=float))
+        metrics[f"{model}_mae"] = backend.mae(realized_variance.to_numpy(dtype=float), forecast_variance.to_numpy(dtype=float))
         metrics[f"{model}_qlike"] = float(qlike.mean())
-        metrics[f"{model}_forecast_realized_corr"] = _safe_corr(aligned[model], aligned["return"].abs())
+        metrics[f"{model}_forecast_realized_corr"] = backend.forecast_realized_correlation(
+            aligned[model].to_numpy(dtype=float),
+            aligned["return"].abs().to_numpy(dtype=float),
+        )
 
     qlike_scores = {model: metrics.get(f"{model}_qlike") for model in ("garch", "ewma", "naive")}
     finite_scores = {key: value for key, value in qlike_scores.items() if value is not None and np.isfinite(float(value))}
@@ -86,22 +94,6 @@ def run_walk_forward_validation(
 
 def _clean_series(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
-
-
-def _qlike(realized_variance: pd.Series, forecast_variance: pd.Series) -> pd.Series:
-    aligned = pd.concat([realized_variance.rename("realized"), forecast_variance.rename("forecast")], axis=1).dropna()
-    aligned = aligned.loc[aligned["forecast"] > 0]
-    return (aligned["realized"] / aligned["forecast"] + np.log(aligned["forecast"])).rename("qlike")
-
-
-def _safe_corr(left: pd.Series, right: pd.Series) -> float | None:
-    aligned = pd.concat([left.rename("left"), right.rename("right")], axis=1).dropna()
-    if len(aligned) < 3 or aligned["left"].nunique() < 2 or aligned["right"].nunique() < 2:
-        return None
-    value = aligned["left"].corr(aligned["right"])
-    if pd.isna(value):
-        return None
-    return float(value)
 
 
 def _calibration_by_decile(forecast_vol: pd.Series, returns: pd.Series) -> pd.DataFrame:

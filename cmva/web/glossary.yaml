@@ -108,6 +108,111 @@ closed_candle:
   short: "A completed Binance kline. CMVA stores and analyzes only candles whose WebSocket x flag is true."
   formula: "kline.x == true"
   details_url: "/methodology#closed-candle"
+symbols:
+  title: "Symbols U"
+  short: "The Binance Spot symbols included in the closed-candle dataset and model evaluation."
+  formula: "U = {symbol_1, ..., symbol_n}"
+  details_url: "/methodology#data-pipeline"
+analysis_period:
+  title: "Analysis Period T"
+  short: "The historical lookback requested for bootstrap and rolling evaluation."
+  formula: "t in [now - T, now]"
+  details_url: "/methodology#data-pipeline"
+training_window:
+  title: "Training Window S"
+  short: "The trailing duration used to fit each candidate at a rolling origin."
+  formula: "fit sample = candles[t-S, t]"
+  details_url: "/methodology#validation"
+forecast_horizon:
+  title: "Forecast Horizon H"
+  short: "The number of selected-interval bars between a forecast origin and the realized volatility target."
+  formula: "forecast_t -> realized_{t+H}"
+  details_url: "/methodology#validation"
+refit_stride:
+  title: "Refit Stride R"
+  short: "The number of bars between rolling origins during model evaluation."
+  formula: "origin_i = origin_{i-1} + R"
+  details_url: "/methodology#validation"
+two_stage_search:
+  title: "Two-Stage Search"
+  short: "Stage 1 scans enabled candidates quickly; Stage 2 reevaluates top candidates with fuller diagnostics."
+  formula: "rank = f(IC, loss, convergence, stability)"
+  details_url: "/methodology#validation"
+candidate_count:
+  title: "Candidate Count"
+  short: "The maximum number of model specifications enabled for a model-lab run."
+  formula: "|C|"
+  details_url: "/methodology#models"
+candidate_groups:
+  title: "Candidate Groups"
+  short: "Model families included in the scan: mean, trend, volatility, and combined mean-volatility candidates."
+  formula: "C = C_mean ∪ C_trend ∪ C_vol ∪ C_combined"
+  details_url: "/methodology#models"
+target_view:
+  title: "Target View"
+  short: "Whether model diagnostics are shown for log returns, log prices, or both views."
+  formula: "log(C_t) or log(C_t/C_{t-1})"
+  details_url: "/methodology#models"
+log_return:
+  title: "Log Return"
+  short: "The closed-candle log price change used for return-target model diagnostics."
+  formula: "r_t = log(C_t / C_{t-1})"
+  details_url: "/methodology#models"
+log_price:
+  title: "Log Price"
+  short: "The natural logarithm of the basket close price used for level-target model diagnostics."
+  formula: "p_t = log(C_t)"
+  details_url: "/methodology#models"
+rolling_origin:
+  title: "Rolling Origin"
+  short: "A timestamp where candidates are fit using only prior closed candles and evaluated against a later outcome."
+  formula: "train <= t, test = t + H"
+  details_url: "/methodology#validation"
+fit_time:
+  title: "Fit Time"
+  short: "Measured wall-clock time spent fitting and evaluating model candidates."
+  formula: "ms(end - start)"
+  details_url: "/methodology#models"
+cpp_backend:
+  title: "C++ Backend"
+  short: "Native numerical kernels are used when cmva_cpp is importable; Python reference code remains the fallback."
+  formula: "backend = cmva_cpp else PythonBackend"
+  details_url: "/methodology#cpp"
+model_job:
+  title: "Model Job"
+  short: "The current rolling model-lab computation state, including queued work and completed fit counts."
+  formula: "job = stage1 + stage2"
+  details_url: "/methodology#models"
+model_cache:
+  title: "Model Cache"
+  short: "Model-lab cache reuse keyed by configuration and closed-candle data hash."
+  formula: "hash(config, closed_data)"
+  details_url: "/methodology#models"
+model_candidate:
+  title: "Model Candidate"
+  short: "A statistical model specification evaluated on closed-candle returns or log-price diagnostics."
+  formula: "candidate_id = family + order + target"
+  details_url: "/methodology#models"
+seasonality:
+  title: "Seasonality Evidence"
+  short: "A diagnostic signal from seasonal-differenced or seasonal trend candidates."
+  formula: "x_t - x_{t-s}"
+  details_url: "/methodology#trend"
+arch_lm:
+  title: "ARCH-LM"
+  short: "A volatility-clustering diagnostic based on autocorrelation in squared residuals."
+  formula: "nR^2 from eps_t^2 ~ eps_{t-1}^2 ... eps_{t-k}^2"
+  details_url: "/methodology#diagnostics"
+model_uncertainty:
+  title: "Model Uncertainty"
+  short: "How close the top model rankings are after rolling evaluation."
+  formula: "gap(rank_score_2 - rank_score_1)"
+  details_url: "/methodology#models"
+regime_label:
+  title: "Regime Label"
+  short: "Current market-state class derived from closed-candle volatility, trend, correlation, and dispersion features."
+  formula: "label_t = f(features_{<=t})"
+  details_url: "/methodology#regime"
 forming_candle:
   title: "Forming Candle"
   short: "The current in-progress Binance kline. CMVA may display it, but it is excluded from storage and research calculations until closed."

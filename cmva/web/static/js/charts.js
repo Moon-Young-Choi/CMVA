@@ -1,10 +1,97 @@
 (function () {
+  const chartInstances = new WeakMap();
+
   function renderCmvaCharts(snapshot) {
     const series = (snapshot && snapshot.series) || {};
+    if (window.echarts) {
+      upgradeCanvasCharts();
+      document.querySelectorAll(".echart.line-chart").forEach((element) => {
+        const name = element.dataset.series;
+        drawEChart(element, series[name] || [], name || "series");
+      });
+    } else {
+      document.querySelectorAll("canvas.line-chart").forEach((canvas) => {
+        const name = canvas.dataset.series;
+        drawLine(canvas, series[name] || [], name || "series");
+      });
+    }
+  }
+
+  function upgradeCanvasCharts() {
     document.querySelectorAll("canvas.line-chart").forEach((canvas) => {
-      const name = canvas.dataset.series;
-      drawLine(canvas, series[name] || [], name || "series");
+      const div = document.createElement("div");
+      div.className = canvas.className.replace("line-chart", "line-chart echart");
+      div.dataset.series = canvas.dataset.series || "";
+      div.dataset.metric = canvas.dataset.metric || "";
+      div.setAttribute("role", "img");
+      div.setAttribute("aria-label", canvas.getAttribute("aria-label") || `${div.dataset.series} chart`);
+      canvas.replaceWith(div);
     });
+  }
+
+  function drawEChart(element, rows, label) {
+    const values = rows
+      .map((row) => ({
+        time: row.time,
+        value: Number(row.value),
+        label: row.label,
+      }))
+      .filter((row) => Number.isFinite(row.value));
+    let chart = chartInstances.get(element);
+    if (!chart) {
+      chart = window.echarts.init(element, null, { renderer: "canvas" });
+      chartInstances.set(element, chart);
+      window.addEventListener("resize", () => chart.resize());
+    }
+    const title = label.replaceAll("_", " ");
+    chart.setOption(
+      {
+        animation: false,
+        backgroundColor: "#eef2f6",
+        title: {
+          text: title,
+          left: 10,
+          top: 8,
+          textStyle: {
+            color: "#526071",
+            fontSize: 12,
+            fontWeight: 500,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          },
+        },
+        grid: { left: 42, right: 16, top: 42, bottom: 30 },
+        tooltip: {
+          trigger: "axis",
+          confine: true,
+          valueFormatter: (value) => Number(value).toExponential(3),
+        },
+        xAxis: {
+          type: "category",
+          data: values.map((row) => row.time),
+          axisLabel: { color: "#667085", hideOverlap: true },
+          axisLine: { lineStyle: { color: "#c4ccd6" } },
+          axisTick: { show: false },
+        },
+        yAxis: {
+          type: "value",
+          scale: true,
+          axisLabel: { color: "#667085" },
+          splitLine: { lineStyle: { color: "#d8dee6" } },
+        },
+        series: [
+          {
+            name: title,
+            type: "line",
+            data: values.map((row) => row.value),
+            showSymbol: false,
+            smooth: false,
+            lineStyle: { color: "#006d77", width: 2 },
+            areaStyle: { color: "rgba(0, 109, 119, 0.08)" },
+          },
+        ],
+      },
+      true
+    );
   }
 
   function drawLine(canvas, rows, label) {

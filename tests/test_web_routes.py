@@ -22,6 +22,15 @@ def test_web_routes_load_with_synthetic_snapshot(tmp_path, synthetic_candles):
 
     for path in [
         "/",
+        "/setup",
+        "/overview",
+        "/data-quality",
+        "/model-lab",
+        "/current-market-state",
+        "/trend-seasonality",
+        "/diagnostics",
+        "/rolling-evaluation",
+        "/model-comparison",
         "/markets",
         "/volatility",
         "/trend",
@@ -42,14 +51,23 @@ def test_web_routes_render_distinct_pages(tmp_path, synthetic_candles):
     cmva.recompute(synthetic_candles(periods=120), force_refit=True)
     client = TestClient(create_web_app(cmva, start_background=False))
     expected_headings = {
-        "/": "Dashboard",
-        "/markets": "Markets",
+        "/": "Setup",
+        "/setup": "Setup",
+        "/overview": "Overview",
+        "/data-quality": "Data Quality",
+        "/model-lab": "Model Lab",
+        "/current-market-state": "Current Market State",
+        "/trend-seasonality": "Trend & Seasonality",
+        "/diagnostics": "Diagnostics",
+        "/rolling-evaluation": "Rolling Evaluation",
+        "/model-comparison": "Model Comparison",
+        "/markets": "Data Quality",
         "/volatility": "Volatility",
-        "/trend": "Trend",
+        "/trend": "Trend & Seasonality",
         "/correlation-pca": "Correlation / PCA",
         "/shock-regime": "Shock & Regime",
-        "/models": "Models",
-        "/validation": "Backtest / Validation",
+        "/models": "Model Lab",
+        "/validation": "Rolling Evaluation",
         "/methodology": "Methodology",
         "/settings": "Settings",
         "/logs": "Logs",
@@ -76,10 +94,42 @@ def test_snapshot_api_is_json_serializable(tmp_path, synthetic_candles):
     assert "bootstrap_progress" in payload
     assert "data_quality" in payload
     assert "pipeline" in payload
+    assert "setup_estimate" in payload
+    assert "model_lab" in payload
+    assert "cpp_backend" in payload
     assert "standardized_residual" in payload["series"]
     assert "regime_state" in payload["series"]
+    assert "log_return" in payload["series"]
+    assert "log_price" in payload["series"]
+    assert set(payload["model_lab"]["job_status"]["evaluated_targets"]) == {"log_return", "log_price"}
     assert payload["data_quality"]["status"] == "ok"
     assert payload["forming_candle"] is None
+
+
+def test_snapshot_exposes_inflight_model_lab_status_before_results(tmp_path):
+    cmva = CMVAApplication(CMVAConfig(symbols=WEB_SYMBOLS, interval="1h", data_dir=tmp_path / "data"))
+    cmva._set_model_lab_progress(
+        {
+            "status": "stage1_running",
+            "queue_size": 12,
+            "candidate_count": 8,
+            "stage1_fits": 2,
+            "stage2_fits": 0,
+            "active_stage": "stage1",
+            "active_target": "log_return",
+            "active_candidate": "ar_1:log_return",
+            "completed_fits": 10,
+            "total_fits": 80,
+            "progress_pct": 0.125,
+        }
+    )
+    client = TestClient(create_web_app(cmva, start_background=False))
+
+    payload = client.get("/api/snapshot").json()
+
+    assert payload["model_lab"]["job_status"]["status"] == "stage1_running"
+    assert payload["model_lab"]["job_status"]["active_candidate"] == "ar_1:log_return"
+    assert payload["model_lab"]["job_status"]["progress_pct"] == 0.125
 
 
 def test_markets_page_exposes_data_accumulation(tmp_path, synthetic_candles):
@@ -87,7 +137,7 @@ def test_markets_page_exposes_data_accumulation(tmp_path, synthetic_candles):
     cmva.recompute(synthetic_candles(periods=120), force_refit=True)
     client = TestClient(create_web_app(cmva, start_background=False))
 
-    response = client.get("/markets")
+    response = client.get("/data-quality")
 
     assert response.status_code == 200
     assert "Accumulation By Symbol" in response.text
@@ -97,6 +147,21 @@ def test_markets_page_exposes_data_accumulation(tmp_path, synthetic_candles):
     assert "Data To Validation Flow" in response.text
     assert "Recent Accumulated Candles" in response.text
     assert "BTCUSDT" in response.text
+
+
+def test_model_evaluation_pages_expose_filter_controls(tmp_path, synthetic_candles):
+    cmva = CMVAApplication(CMVAConfig(symbols=WEB_SYMBOLS, interval="1h", data_dir=tmp_path / "data"))
+    cmva.recompute(synthetic_candles(periods=120), force_refit=True)
+    client = TestClient(create_web_app(cmva, start_background=False))
+
+    rolling = client.get("/rolling-evaluation")
+    comparison = client.get("/model-comparison")
+
+    assert "Evaluation Filters" in rolling.text
+    assert "name=\"metric\"" in rolling.text
+    assert "data-table-filter=\"#rolling-timeline-table\"" in rolling.text
+    assert "Leaderboard Filters" in comparison.text
+    assert "data-table-filter=\"#model-comparison-table\"" in comparison.text
 
 
 def test_snapshot_exposes_forming_candle_separately(tmp_path, synthetic_candles):
@@ -131,6 +196,8 @@ def test_live_script_and_websocket_snapshot_are_available(tmp_path, synthetic_ca
 
     response = client.get("/")
     assert "/static/js/live.js" in response.text
+    assert "echarts.min.js" in response.text
+    assert "/static/js/charts.js" in response.text
 
     with client.websocket_connect("/ws/snapshot") as websocket:
         payload = websocket.receive_json()
@@ -149,7 +216,7 @@ def test_routes_respond_while_background_bootstrap_is_running(tmp_path):
 
     with TestClient(create_web_app(cmva, start_background=True)) as client:
         started = time.perf_counter()
-        response = client.get("/validation")
+        response = client.get("/rolling-evaluation")
         elapsed = time.perf_counter() - started
 
     assert response.status_code == 200

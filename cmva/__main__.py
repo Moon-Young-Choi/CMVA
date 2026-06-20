@@ -16,11 +16,10 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1", help="Host interface for the local web server.")
     parser.add_argument("--port", default=8765, type=int, help="Port for the local web server.")
     parser.add_argument("--no-browser", action="store_true", help="Start the server without opening a browser.")
-    parser.add_argument("--tui", action="store_true", help="Open the legacy Textual TUI fallback instead of the web dashboard.")
     args = parser.parse_args()
     _reexec_with_local_venv_if_available()
     try:
-        from cmva.app import run, run_tui
+        from cmva.app import run
     except ModuleNotFoundError as exc:
         missing = exc.name or "a required dependency"
         print(f"CMVA cannot start because `{missing}` is not installed in this Python environment.")
@@ -32,10 +31,7 @@ def main() -> None:
         print("If `.venv` does not exist yet, run:")
         print("  ./run_cmva.sh")
         raise SystemExit(1) from None
-    if args.tui:
-        run_tui()
-    else:
-        run(host=args.host, port=args.port, open_browser=not args.no_browser)
+    run(host=args.host, port=args.port, open_browser=not args.no_browser)
 
 
 def _reexec_with_local_venv_if_available() -> None:

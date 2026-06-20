@@ -2,9 +2,9 @@
 
 CMVA, Crypto Market Volatility Analysis, is a localhost web research dashboard for public crypto market-state analytics and model validation.
 
-It uses Binance Spot public candles to analyze volatility, trend, correlation/PCA common-risk structure, shock labels, and regimes at a user-selected candle interval. Backtesting in CMVA means walk-forward model validation, not trading strategy PnL simulation.
+It uses Binance Spot public candles to analyze volatility, trend, correlation/PCA common-risk structure, shock labels, and regimes at a user-selected candle interval. Backtesting in CMVA means walk-forward model validation, not trade-performance simulation.
 
-CMVA does not place orders, generate trading strategies, request private API keys, access exchange accounts, or implement futures/margin/leverage trading.
+CMVA does not place orders, request private API keys, access exchange accounts, or implement futures/margin/leverage trading.
 The product surface is the local UI itself: accumulated closed-candle data, validation state, and statistical market-state analysis.
 
 ## Run
@@ -41,16 +41,10 @@ Headless run:
 python -m cmva --no-browser
 ```
 
-Legacy Textual fallback:
-
-```bash
-python -m cmva --tui
-```
-
 ## Data Policy
 
 - Binance Spot public market data only.
-- Default candle interval: `15m`.
+- Default candle interval: `1h`.
 - Supported MVP intervals: `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, `1d`, `3d`, `1w`, `1M`.
 - REST klines provide historical bootstrap.
 - WebSocket kline streams update live state.
@@ -72,20 +66,27 @@ Defaults:
 Example:
 
 ```text
-Interval: 15m
-Forecast horizon: 1 bar = next 15 minutes
-Volatility window: 24h = 96 bars
+Interval: 1h
+Forecast horizon: 1 bar = next 1 hour
+Volatility window: 24h = 24 bars
 ```
 
 ## Validation
 
-CMVA compares volatility models with walk-forward forecast loss:
+CMVA compares rolling time-series model candidates with information criteria, diagnostics, and walk-forward forecast loss:
 
+- naive mean, constant mean, AR, MA, ARMA, ARIMA, lightweight seasonal candidates
+- realized volatility, EWMA volatility, ARCH, GARCH, Student-t GARCH
+- combined AR/ARMA/ARIMA + GARCH candidates
 - GARCH(1,1)-Student-t
 - EWMA volatility
 - naive previous realized volatility
 
 Metrics include RMSE, MAE, QLIKE, forecast-realized correlation, calibration by decile, realized volatility by regime, and residual diagnostics.
+
+## Native Backend
+
+CMVA builds a `cmva_cpp` pybind11 extension through scikit-build-core. The C++ backend is used by default when importable, and the Python reference backend remains available for offline tests and fallback runs.
 
 ## Data Accumulation UI
 

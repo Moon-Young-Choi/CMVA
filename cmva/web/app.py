@@ -13,12 +13,15 @@ from typing import Any, AsyncIterator
 import pandas as pd
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from cmva.app import CMVAApplication
+from cmva.engine.interval import bars_for_duration, interval_to_timedelta
+from cmva.models.lab import default_candidate_specs, generate_rolling_origins
+from cmva.native.backend import backend_status
 from cmva.web.glossary import load_glossary
 
 
@@ -34,8 +37,20 @@ def create_web_app(cmva: CMVAApplication | None = None, start_background: bool =
     app.mount("/static", StaticFiles(directory=str(PACKAGE_DIR / "static")), name="static")
 
     @app.get("/", response_class=HTMLResponse)
-    async def dashboard(request: Request) -> HTMLResponse:
-        return _render(request, "dashboard.html", page="dashboard")
+    async def setup_home(request: Request) -> HTMLResponse:
+        return _render(request, "setup.html", page="setup")
+
+    @app.get("/setup", response_class=HTMLResponse)
+    async def setup(request: Request) -> HTMLResponse:
+        return _render(request, "setup.html", page="setup")
+
+    @app.get("/overview", response_class=HTMLResponse)
+    async def overview(request: Request) -> HTMLResponse:
+        return _render(request, "overview.html", page="overview")
+
+    @app.get("/dashboard", response_class=HTMLResponse)
+    async def dashboard_alias(request: Request) -> HTMLResponse:
+        return _render(request, "overview.html", page="overview")
 
     @app.get("/favicon.ico")
     async def favicon() -> Response:
@@ -43,7 +58,11 @@ def create_web_app(cmva: CMVAApplication | None = None, start_background: bool =
 
     @app.get("/markets", response_class=HTMLResponse)
     async def markets(request: Request) -> HTMLResponse:
-        return _render(request, "markets.html", page="markets")
+        return _render(request, "data_quality.html", page="data_quality")
+
+    @app.get("/data-quality", response_class=HTMLResponse)
+    async def data_quality(request: Request) -> HTMLResponse:
+        return _render(request, "data_quality.html", page="data_quality")
 
     @app.get("/volatility", response_class=HTMLResponse)
     async def volatility(request: Request) -> HTMLResponse:
@@ -51,7 +70,11 @@ def create_web_app(cmva: CMVAApplication | None = None, start_background: bool =
 
     @app.get("/trend", response_class=HTMLResponse)
     async def trend(request: Request) -> HTMLResponse:
-        return _render(request, "trend.html", page="trend")
+        return _render(request, "trend_seasonality.html", page="trend_seasonality")
+
+    @app.get("/trend-seasonality", response_class=HTMLResponse)
+    async def trend_seasonality(request: Request) -> HTMLResponse:
+        return _render(request, "trend_seasonality.html", page="trend_seasonality")
 
     @app.get("/correlation-pca", response_class=HTMLResponse)
     async def correlation_pca(request: Request) -> HTMLResponse:
@@ -61,13 +84,33 @@ def create_web_app(cmva: CMVAApplication | None = None, start_background: bool =
     async def shock_regime(request: Request) -> HTMLResponse:
         return _render(request, "shock_regime.html", page="shock_regime")
 
+    @app.get("/current-market-state", response_class=HTMLResponse)
+    async def current_market_state(request: Request) -> HTMLResponse:
+        return _render(request, "current_market_state.html", page="current_market_state")
+
     @app.get("/models", response_class=HTMLResponse)
     async def models(request: Request) -> HTMLResponse:
-        return _render(request, "models.html", page="models")
+        return _render(request, "model_lab.html", page="model_lab")
+
+    @app.get("/model-lab", response_class=HTMLResponse)
+    async def model_lab(request: Request) -> HTMLResponse:
+        return _render(request, "model_lab.html", page="model_lab")
 
     @app.get("/validation", response_class=HTMLResponse)
     async def validation(request: Request) -> HTMLResponse:
-        return _render(request, "validation.html", page="validation")
+        return _render(request, "rolling_evaluation.html", page="rolling_evaluation")
+
+    @app.get("/rolling-evaluation", response_class=HTMLResponse)
+    async def rolling_evaluation(request: Request) -> HTMLResponse:
+        return _render(request, "rolling_evaluation.html", page="rolling_evaluation")
+
+    @app.get("/model-comparison", response_class=HTMLResponse)
+    async def model_comparison(request: Request) -> HTMLResponse:
+        return _render(request, "model_comparison.html", page="model_comparison")
+
+    @app.get("/diagnostics", response_class=HTMLResponse)
+    async def diagnostics(request: Request) -> HTMLResponse:
+        return _render(request, "diagnostics.html", page="diagnostics")
 
     @app.get("/methodology", response_class=HTMLResponse)
     async def methodology(request: Request) -> HTMLResponse:
@@ -78,47 +121,50 @@ def create_web_app(cmva: CMVAApplication | None = None, start_background: bool =
         return _render(request, "settings.html", page="settings")
 
     @app.post("/settings")
-    async def update_settings(
-        symbols: str = Form(...),
-        interval: str = Form(...),
-        forecast_horizon_bars: int = Form(...),
-        volatility_window: str = Form(...),
-        correlation_window: str = Form(...),
-        pca_window: str = Form(...),
-        trend_window: str = Form(...),
-        regime_threshold_window: str = Form(...),
-        dashboard_time_range: str = Form(...),
-        forecast_time_range: str = Form(...),
-        backtest_time_range: str = Form(...),
-        garch_refit_frequency: int = Form(...),
-        severe_shock_threshold: float = Form(...),
-        moderate_shock_threshold: float = Form(...),
-    ) -> RedirectResponse:
+    async def update_settings(request: Request) -> RedirectResponse:
+        form = await request.form()
+        symbols = str(form.get("symbols", ", ".join(cmva_app.config.symbols)))
+        candidate_groups = form.getlist("candidate_model_groups") or [
+            item.strip() for item in str(form.get("candidate_model_groups_csv", "")).split(",") if item.strip()
+        ]
         cmva_app.apply_settings(
             {
                 "symbols": [item.strip().upper() for item in symbols.split(",") if item.strip()],
-                "interval": interval,
-                "forecast_horizon_bars": forecast_horizon_bars,
-                "volatility_window": volatility_window,
-                "correlation_window": correlation_window,
-                "pca_window": pca_window,
-                "trend_window": trend_window,
-                "regime_threshold_window": regime_threshold_window,
-                "garch_refit_frequency": garch_refit_frequency,
-                "severe_shock_threshold": severe_shock_threshold,
-                "moderate_shock_threshold": moderate_shock_threshold,
+                "interval": str(form.get("interval", cmva_app.config.interval)),
+                "analysis_period": str(form.get("analysis_period", cmva_app.config.analysis_period)),
+                "training_window": str(form.get("training_window", cmva_app.config.training_window)),
+                "forecast_horizon_bars": _int_form(form, "forecast_horizon_bars", cmva_app.config.forecast_horizon_bars),
+                "refit_stride_bars": _int_form(form, "refit_stride_bars", cmva_app.config.refit_stride_bars),
+                "search_mode": str(form.get("search_mode", cmva_app.config.search_mode)),
+                "candidate_model_count": _int_form(form, "candidate_model_count", cmva_app.config.candidate_model_count),
+                "candidate_model_groups": candidate_groups or cmva_app.config.candidate_model_groups,
+                "target_view": str(form.get("target_view", cmva_app.config.target_view)),
+                "volatility_window": str(form.get("volatility_window", cmva_app.config.volatility_window)),
+                "correlation_window": str(form.get("correlation_window", cmva_app.config.correlation_window)),
+                "pca_window": str(form.get("pca_window", cmva_app.config.pca_window)),
+                "trend_window": str(form.get("trend_window", cmva_app.config.trend_window)),
+                "regime_threshold_window": str(
+                    form.get("regime_threshold_window", cmva_app.config.regime_threshold_window)
+                ),
+                "garch_refit_frequency": _int_form(form, "garch_refit_frequency", cmva_app.config.garch_refit_frequency),
+                "severe_shock_threshold": _float_form(
+                    form, "severe_shock_threshold", cmva_app.config.severe_shock_threshold
+                ),
+                "moderate_shock_threshold": _float_form(
+                    form, "moderate_shock_threshold", cmva_app.config.moderate_shock_threshold
+                ),
             },
             recompute=True,
         )
         cmva_app.apply_view_ranges(
             {
-                "dashboard_time_range": dashboard_time_range,
-                "forecast_time_range": forecast_time_range,
-                "backtest_time_range": backtest_time_range,
+                "dashboard_time_range": str(form.get("dashboard_time_range", cmva_app.config.dashboard_time_range)),
+                "forecast_time_range": str(form.get("forecast_time_range", cmva_app.config.forecast_time_range)),
+                "backtest_time_range": str(form.get("backtest_time_range", cmva_app.config.backtest_time_range)),
             },
             recompute_backtest=True,
         )
-        return RedirectResponse("/settings", status_code=303)
+        return RedirectResponse(str(form.get("next_path", "/setup")), status_code=303)
 
     @app.get("/logs", response_class=HTMLResponse)
     async def logs(request: Request) -> HTMLResponse:
@@ -216,6 +262,13 @@ def build_snapshot(cmva: CMVAApplication) -> dict[str, Any]:
     pipeline = _empty_pipeline()
     recent_candles: list[dict[str, Any]] = []
     validation = cmva.range_model_validation or (cmva.snapshot.model_validation if cmva.snapshot else None)
+    model_lab = cmva.snapshot.model_lab if cmva.snapshot is not None else None
+    model_lab_job_status = dict(getattr(cmva, "model_lab_job_status", {}) or {})
+    if model_lab is not None and model_lab_job_status.get("status") == "idle":
+        model_lab_job_status = dict(model_lab.job_status)
+    model_lab_summary = model_lab.summary() if model_lab is not None else {}
+    if model_lab_job_status:
+        model_lab_summary = {**model_lab_summary, **model_lab_job_status}
     if cmva.snapshot is not None:
         features = cmva.snapshot.features.features
         if not features.empty:
@@ -239,6 +292,10 @@ def build_snapshot(cmva: CMVAApplication) -> dict[str, Any]:
                 "up_down_ratio",
             ):
                 series[name] = _series_records(features.get(name))
+            series["log_return"] = _series_records(features.get("basket_return"))
+            basket_price = cmva.snapshot.features.close.mean(axis=1, skipna=True)
+            log_price = np.log(basket_price.where(basket_price > 0)).replace([np.inf, -np.inf], np.nan)
+            series["log_price"] = _series_records(log_price.rename("log_price"))
             series["forecast_vol"] = _series_records(cmva.snapshot.historical_forecast)
             prior_forecast = cmva.snapshot.historical_forecast.reindex(features.index).shift(1).replace(0.0, np.nan)
             standardized = (features["basket_return"] / prior_forecast).replace([np.inf, -np.inf], np.nan)
@@ -256,6 +313,13 @@ def build_snapshot(cmva: CMVAApplication) -> dict[str, Any]:
     if validation is not None:
         for name in ("garch_qlike", "ewma_qlike", "naive_qlike"):
             series[name] = _series_records(validation.losses.get(name))
+        for model in ("garch", "ewma", "naive"):
+            squared = validation.losses.get(f"{model}_squared_error")
+            absolute = validation.losses.get(f"{model}_absolute_error")
+            if squared is not None:
+                series[f"{model}_rmse_loss"] = _series_records(np.sqrt(pd.to_numeric(squared, errors="coerce")))
+            if absolute is not None:
+                series[f"{model}_mae_loss"] = _series_records(absolute)
     return {
         "summary": cmva.summary(),
         "mode": cmva.state.mode,
@@ -263,6 +327,7 @@ def build_snapshot(cmva: CMVAApplication) -> dict[str, Any]:
         "data_accumulation": data_accumulation,
         "data_quality": data_quality,
         "pipeline": pipeline,
+        "setup_estimate": _setup_estimate(cmva, data_accumulation),
         "forming_candle": cmva.state.data_status.get("current_candle"),
         "data_policy": {
             "research_dataset": "closed candles only",
@@ -274,6 +339,18 @@ def build_snapshot(cmva: CMVAApplication) -> dict[str, Any]:
         "market_rows": market_rows,
         "series": series,
         "model_status": cmva.state.model_status,
+        "cpp_backend": backend_status(),
+        "model_lab": {
+            "summary": model_lab_summary,
+            "stage1": _frame_records(model_lab.stage1, limit=200) if model_lab is not None else [],
+            "stage2": _frame_records(model_lab.stage2, limit=200) if model_lab is not None else [],
+            "leaderboard": _frame_records(model_lab.leaderboard, limit=200) if model_lab is not None else [],
+            "timelines": _frame_records(model_lab.timelines, limit=400) if model_lab is not None else [],
+            "rank_heatmap": _heatmap_records(model_lab.rank_heatmap) if model_lab is not None else [],
+            "selected": model_lab.selected if model_lab is not None else {},
+            "current_state": model_lab.current_state if model_lab is not None else {},
+            "job_status": model_lab_job_status,
+        },
         "range_status": cmva.state.range_status,
         "validation": validation.summary() if validation is not None else {},
         "validation_losses": _frame_records(validation.losses) if validation is not None else [],
@@ -356,7 +433,7 @@ def _data_accumulation(candles: pd.DataFrame, expected_symbols: list[str], inter
     if pd.notna(first) and pd.notna(latest):
         coverage_hours = float((latest - first) / pd.Timedelta(hours=1))
     symbols = []
-    expected_delta = pd.Timedelta(interval)
+    expected_delta = interval_to_timedelta(interval)
     for symbol, group in data.groupby("symbol"):
         ordered = group.sort_values("open_time")
         unique_open_times = ordered["open_time"].drop_duplicates()
@@ -451,6 +528,67 @@ def _frame_records(frame: pd.DataFrame, limit: int = 160) -> list[dict[str, Any]
         return []
     data = frame.tail(limit).reset_index()
     return data.to_dict(orient="records")
+
+
+def _heatmap_records(frame: pd.DataFrame, limit_columns: int = 80) -> list[dict[str, Any]]:
+    if frame.empty:
+        return []
+    limited = frame.iloc[:, -limit_columns:].copy()
+    records = []
+    for candidate, row in limited.iterrows():
+        record = {"candidate": candidate}
+        record.update({str(column): value for column, value in row.items()})
+        records.append(record)
+    return records
+
+
+def _int_form(form: Any, key: str, default: int) -> int:
+    try:
+        return int(form.get(key, default))
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _float_form(form: Any, key: str, default: float) -> float:
+    try:
+        return float(form.get(key, default))
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _setup_estimate(cmva: CMVAApplication, data_accumulation: dict[str, Any]) -> dict[str, object]:
+    candidate_specs = default_candidate_specs(
+        groups=cmva.config.candidate_model_groups,
+        target_view=cmva.config.target_view,
+        limit=cmva.config.candidate_model_count,
+    )
+    rows = int(data_accumulation.get("total_rows") or 0)
+    symbol_count = max(1, len(cmva.config.symbols))
+    per_symbol_rows = max(0, rows // symbol_count)
+    training_bars = bars_for_duration(cmva.config.training_window, cmva.config.interval)
+    origins = generate_rolling_origins(
+        per_symbol_rows,
+        training_window_bars=training_bars,
+        horizon_bars=cmva.config.forecast_horizon_bars,
+        refit_stride_bars=cmva.config.refit_stride_bars,
+    )
+    stage1_fits = len(candidate_specs) * min(len(origins), max(8, min(40, len(origins) // 2 or len(origins))))
+    stage2_candidates = max(3, min(6, len(candidate_specs) // 2 or len(candidate_specs)))
+    stage2_fits = stage2_candidates * len(origins)
+    estimated_total = stage1_fits + stage2_fits
+    return {
+        "symbols": len(cmva.config.symbols),
+        "candidate_specs": len(candidate_specs),
+        "rolling_origins": len(origins),
+        "stage1_fits": stage1_fits,
+        "stage2_fits": stage2_fits,
+        "estimated_total_fits": estimated_total,
+        "training_window_bars": training_bars,
+        "forecast_horizon_bars": cmva.config.forecast_horizon_bars,
+        "refit_stride_bars": cmva.config.refit_stride_bars,
+        "estimated_runtime": f"{max(1, estimated_total) * 5} ms to {max(1, estimated_total) * 40} ms",
+        "memory_estimate": f"{max(1, rows) * max(1, len(candidate_specs)) * 8 / 1024 / 1024:.2f} MB",
+    }
 
 
 def _jsonable(value: Any) -> Any:

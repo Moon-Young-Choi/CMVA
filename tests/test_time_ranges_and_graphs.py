@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-import asyncio
+import importlib.util
+import subprocess
+import sys
 
 import pandas as pd
 import pytest
-from rich.console import Console
-from textual.containers import VerticalScroll
-from textual.widgets import Input
+from fastapi.testclient import TestClient
 
 from cmva.app import CMVAApplication
 from cmva.config import CMVAConfig
 from cmva.time_ranges import parse_time_range, slice_by_time_range
-from cmva.tui.app import CMVATuiApp, _parse_ranges
-from cmva.tui.graphs import time_series_panel
-from cmva.tui.screens import render_backtest, render_dashboard, render_stat_tests
+from cmva.web.app import create_web_app
 
 
 @pytest.mark.parametrize(
@@ -54,32 +52,16 @@ def test_one_day_slice_returns_latest_24_hourly_rows():
     assert metadata.actual_points == 24
 
 
-def test_graph_renderer_handles_common_series_shapes():
-    index = pd.date_range("2026-01-01", periods=8, freq="1h", tz="UTC")
-    cases = [
-        pd.Series([1, 2, 3, 2, 5, 4, 3, 6], index=index),
-        pd.Series([1] * 8, index=index),
-        pd.Series([None, None, 1, None, 2, None, 3, None], index=index),
-        pd.Series([-3, -2, -1, 0, 1, 0, -1, 2], index=index),
-        pd.Series([1], index=index[:1]),
-    ]
-    console = Console(record=True, width=120)
-    for pos, series in enumerate(cases):
-        console.print(time_series_panel(series, f"case {pos}", "all"))
-
-    text = console.export_text()
-    assert "case 0" in text
-    assert "latest=" in text
-
-
 def test_default_range_config_values():
     config = CMVAConfig()
 
-    assert config.interval == "15m"
-    assert config.forecast_horizon == "1 bar = next 15 minutes"
+    assert config.interval == "1h"
+    assert config.forecast_horizon == "1 bar = next 1 hour"
     assert config.dashboard_time_range == "1d"
     assert config.forecast_time_range == "1w"
     assert config.backtest_time_range == "1y"
+    assert config.training_window == "30d"
+    assert config.search_mode == "two_stage"
 
 
 def test_range_settings_change_backtest_sample_size(tmp_path, synthetic_candles):
@@ -118,56 +100,36 @@ def test_forecast_diagnostics_use_selected_forecast_range(tmp_path, synthetic_ca
     assert app.state.latest_diagnostics.forecast_tests
 
 
-def test_dashboard_and_backtest_render_range_labels_and_graphs(tmp_path, synthetic_candles):
+def test_new_web_pages_render_range_and_model_lab_surfaces(tmp_path, synthetic_candles):
     app = CMVAApplication(CMVAConfig(interval="1h", data_dir=tmp_path / "data"))
-    app.recompute(synthetic_candles(periods=240), force_refit=True)
-    console = Console(record=True, width=160)
+    app.recompute(synthetic_candles(periods=120), force_refit=True)
+    client = TestClient(create_web_app(app, start_background=False))
 
-    console.print(render_dashboard(app))
-    dashboard = console.export_text()
-    assert "Dashboard range" in dashboard
-    assert "Forecast horizon" in dashboard
-    assert "Basket Return" in dashboard
+    pages = {
+        "/setup": "Setup",
+        "/overview": "Overview",
+        "/data-quality": "Data Quality",
+        "/model-lab": "Model Lab",
+        "/current-market-state": "Current Market State",
+        "/trend-seasonality": "Trend & Seasonality",
+        "/diagnostics": "Diagnostics",
+        "/rolling-evaluation": "Rolling Evaluation",
+        "/model-comparison": "Model Comparison",
+    }
 
-    console = Console(record=True, width=160)
-    console.print(render_backtest(app))
-    backtest = console.export_text()
-    assert "Backtest / Validation" in backtest
-    assert "QLIKE Forecast Loss" in backtest
-    assert "backtest_observations" in backtest
-
-
-def test_stat_tests_render_active_forecast_range(tmp_path, synthetic_candles):
-    app = CMVAApplication(CMVAConfig(interval="1h", data_dir=tmp_path / "data"))
-    app.recompute(synthetic_candles(periods=240), force_refit=True)
-    console = Console(record=True, width=160)
-
-    console.print(render_stat_tests(app))
-    text = console.export_text()
-
-    assert "Active Diagnostic Window" in text
-    assert "Forecast diagnostics range=1W" in text
+    for path, heading in pages.items():
+        response = client.get(path)
+        assert response.status_code == 200
+        assert f"<h1>{heading}</h1>" in response.text
 
 
-def test_settings_tab_exposes_range_controls(tmp_path):
-    app = CMVATuiApp(CMVAApplication(CMVAConfig(data_dir=tmp_path / "data")))
-
-    async def noop_bootstrap() -> None:
-        return None
-
-    app._bootstrap = noop_bootstrap  # type: ignore[method-assign]
-
-    async def run() -> None:
-        async with app.run_test() as pilot:
-            assert pilot.app.query_one("#settings_scroll", VerticalScroll)
-            ranges = pilot.app.query_one("#settings_ranges", Input)
-            assert ranges.value == "1d, 1w, 1y"
-
-    asyncio.run(run())
-
-
-def test_range_form_parser_rejects_invalid_values():
-    assert _parse_ranges("1d, 1w, all") == ("1d", "1w", "all")
-    with pytest.raises(ValueError):
-        _parse_ranges("1d, soon, all")
-
+def test_legacy_tui_paths_are_removed():
+    assert importlib.util.find_spec("cmva.tui") is None
+    result = subprocess.run(
+        [sys.executable, "-m", "cmva", "--tui"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert result.returncode != 0
+    assert "unrecognized arguments: --tui" in result.stderr

@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import asyncio
-
 import pandas as pd
 import pytest
-from rich.console import Console
-from textual.containers import VerticalScroll
+from fastapi.testclient import TestClient
 
 from cmva.app import CMVAApplication
 from cmva.config import CMVAConfig
 from cmva.models.diagnostics import run_statistical_diagnostics
 from cmva.regime.shock import compute_shock_series
-from cmva.tui.app import CMVATuiApp
-from cmva.tui.screens import render_methodology, render_stat_tests
 from cmva.validation import run_walk_forward_validation
+from cmva.web.app import create_web_app
 
 
 def test_shock_score_uses_prior_forecast_only():
@@ -70,35 +66,14 @@ def test_validation_diagnostics_are_deterministic():
     assert first_stats == second_stats
 
 
-def test_methodology_and_stat_tabs_render_math_and_pvalues(tmp_path, synthetic_candles):
+def test_diagnostics_page_renders_structured_results(tmp_path, synthetic_candles):
     app = CMVAApplication(CMVAConfig(interval="1h", data_dir=tmp_path / "data"))
     app.recompute(synthetic_candles(periods=80), force_refit=True)
-    console = Console(record=True, width=160)
+    client = TestClient(create_web_app(app, start_background=False))
 
-    console.print(render_methodology(app))
-    methodology = console.export_text()
-    assert "r_t = log(C_t / C_{t-1})" in methodology
-    assert "sigma_{t|t-1}" in methodology
+    response = client.get("/diagnostics")
 
-    console = Console(record=True, width=160)
-    console.print(render_stat_tests(app))
-    stat_tests = console.export_text()
-    assert "Model Diagnostics" in stat_tests
-    assert "p" in stat_tests
-    assert "Decision" in stat_tests
-
-
-def test_settings_tab_is_wrapped_in_vertical_scroll(tmp_path):
-    app = CMVATuiApp(CMVAApplication(CMVAConfig(data_dir=tmp_path / "data")))
-
-    async def noop_bootstrap() -> None:
-        return None
-
-    app._bootstrap = noop_bootstrap  # type: ignore[method-assign]
-
-    async def run() -> None:
-        async with app.run_test() as pilot:
-            assert pilot.app.query_one("#settings_scroll", VerticalScroll)
-
-    asyncio.run(run())
-
+    assert response.status_code == 200
+    assert "Model Diagnostics" in response.text
+    assert "p-value" in response.text
+    assert "Decision" in response.text

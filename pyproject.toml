@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["scikit-build-core>=0.8", "pybind11>=2.11"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "cmva"
@@ -15,8 +15,6 @@ dependencies = [
   "arch",
   "statsmodels",
   "scikit-learn",
-  "textual",
-  "rich",
   "httpx",
   "websockets",
   "pyarrow",
@@ -33,6 +31,11 @@ dev = ["pytest"]
 
 [project.scripts]
 cmva = "cmva.__main__:main"
+
+[tool.scikit-build]
+wheel.packages = ["cmva"]
+cmake.version = ">=3.15"
+build-dir = "build/{wheel_tag}"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import pandas as pd
+import numpy as np
 
 from cmva.analysis_types import DiagnosticSnapshot
 from cmva.config import CMVAConfig, ensure_artifact_dirs, load_config
@@ -22,11 +23,13 @@ from cmva.forecast.volatility_forecaster import ForecastSnapshot, VolatilityFore
 from cmva.logging_config import configure_logging
 from cmva.models.garch import historical_garch_forecast
 from cmva.models.diagnostics import build_method_steps, run_statistical_diagnostics
+from cmva.models.lab import ModelLabResult, run_model_lab
 from cmva.models.selection import ModelSelectionResult, select_volatility_model
+from cmva.native.backend import backend_status
 from cmva.regime.classifier import classify_regime_series
 from cmva.regime.shock import compute_shock_series
 from cmva.state import AppState
-from cmva.time_ranges import slice_by_time_range
+from cmva.time_ranges import parse_time_range, slice_by_time_range
 from cmva.validation import ModelValidationResult, run_walk_forward_validation
 
 
@@ -39,6 +42,7 @@ class AnalysisSnapshot:
     regimes: pd.Series
     shocks: pd.DataFrame
     model_validation: ModelValidationResult | None
+    model_lab: ModelLabResult | None
     validation: ValidationReport
     diagnostics: DiagnosticSnapshot
 
@@ -59,6 +63,16 @@ class CMVAApplication:
         self.range_diagnostics: DiagnosticSnapshot | None = None
         self.model_selection: ModelSelectionResult | None = None
         self.last_model_selection_time: pd.Timestamp | None = None
+        self.model_lab_job_status: dict[str, object] = {
+            "status": "idle",
+            "queue_size": 0,
+            "cache_hit_rate": 0.0,
+            "candidate_count": 0,
+            "stage1_fits": 0,
+            "stage2_fits": 0,
+            "progress_pct": 0.0,
+            "updated_at": pd.Timestamp.now(tz="UTC"),
+        }
 
     async def bootstrap(self, fetch_remote: bool = True) -> None:
         self.state.mode = "BOOTSTRAP"
@@ -86,7 +100,12 @@ class CMVAApplication:
 
     async def fetch_missing_history(self, existing: pd.DataFrame) -> pd.DataFrame:
         now = latest_closed_open_time(pd.Timestamp(datetime.now(timezone.utc)), self.config.interval)
-        desired_start = now - pd.Timedelta(days=self.config.historical_days)
+        analysis_range = parse_time_range(self.config.analysis_period)
+        desired_start = (
+            now - pd.Timedelta(hours=analysis_range.hours)
+            if analysis_range.hours is not None
+            else now - pd.Timedelta(days=self.config.historical_days)
+        )
         fetched: list[Candle] = []
         fetched_count = 0
         total_symbols = len(self.config.symbols)
@@ -200,6 +219,19 @@ class CMVAApplication:
                 realized_vol=features.features["market_vol"],
                 regimes=regimes,
             )
+        self._set_model_lab_progress(
+            {
+                "status": "queued",
+                "queue_size": 1,
+                "cache_hit_rate": 0.0,
+                "candidate_count": self.config.candidate_model_count,
+                "stage1_fits": 0,
+                "stage2_fits": 0,
+                "progress_pct": 0.0,
+            }
+        )
+        model_lab = run_model_lab(self._model_lab_targets(features), self.config, progress_callback=self._set_model_lab_progress)
+        self._set_model_lab_progress(model_lab.job_status)
         garch_params = dict(self.forecaster.basket_model._fit_result.params)
         diagnostics = run_statistical_diagnostics(
             basket_returns=features.features["basket_return"],
@@ -226,6 +258,7 @@ class CMVAApplication:
             regimes,
             shocks,
             model_validation,
+            model_lab,
             validation,
             diagnostics,
         )
@@ -323,6 +356,13 @@ class CMVAApplication:
             "moderate_shock_threshold",
             "shock_breadth_threshold",
             "use_cpp",
+            "analysis_period",
+            "training_window",
+            "refit_stride_bars",
+            "search_mode",
+            "candidate_model_count",
+            "candidate_model_groups",
+            "target_view",
         }
         current = asdict(self.config)
         for key, value in updates.items():
@@ -394,6 +434,38 @@ class CMVAApplication:
             forecast.iloc[-1] = latest_garch.volatility
         return forecast.ffill().fillna(features["market_vol"]).rename("forecast_vol")
 
+    def _model_lab_targets(self, features: FeatureBundle) -> dict[str, pd.Series]:
+        basket_price = features.close.mean(axis=1, skipna=True)
+        log_price = pd.Series(
+            np.log(basket_price.where(basket_price > 0)).replace([np.inf, -np.inf], np.nan),
+            index=basket_price.index,
+            name="log_price",
+        )
+        return {
+            "log_return": features.features["basket_return"].rename("log_return"),
+            "log_price": log_price,
+        }
+
+    def _set_model_lab_progress(self, status: dict[str, object]) -> None:
+        payload = {**self.model_lab_job_status, **status}
+        if not status.get("updated_at"):
+            payload["updated_at"] = pd.Timestamp.now(tz="UTC")
+        if payload.get("status") in {"complete", "no_data", "not_enough_data", "no_candidates"}:
+            payload["active_stage"] = payload.get("active_stage") or payload.get("status")
+            payload["active_target"] = status.get("active_target")
+            payload["active_candidate"] = status.get("active_candidate")
+        self.model_lab_job_status = payload
+        self.state.model_status.update(
+            {
+                "model_lab_status": payload.get("status"),
+                "model_lab_queue_size": payload.get("queue_size", 0),
+                "model_lab_cache_hit_rate": payload.get("cache_hit_rate", 0.0),
+                "model_lab_progress_pct": payload.get("progress_pct", 0.0),
+                "model_lab_active_stage": payload.get("active_stage"),
+                "model_lab_active_target": payload.get("active_target"),
+            }
+        )
+
     def _update_state(self, snapshot: AnalysisSnapshot, forecast_series: pd.Series) -> None:
         features = snapshot.features.features
         current_candle = self.state.data_status.get("current_candle")
@@ -411,12 +483,22 @@ class CMVAApplication:
                 self.state.push_trend("trend_strength", float(features["trend_strength"].iloc[-1]))
             if not snapshot.shocks.empty and "shock_score" in snapshot.shocks:
                 self.state.push_trend("regime_score", float(snapshot.shocks["shock_score"].iloc[-1]))
+        model_lab_status = self.model_lab_job_status or (snapshot.model_lab.job_status if snapshot.model_lab else {})
         self.state.model_status = {
             **snapshot.forecast.status,
             "basket_forecast_model": snapshot.forecast.basket_forecast.model_name,
             "basket_forecast_degraded": snapshot.forecast.basket_forecast.degraded,
             "refit_countdown": snapshot.forecast.refit_countdown,
+            "model_lab_status": model_lab_status.get("status", "not-run"),
+            "model_lab_queue_size": model_lab_status.get("queue_size", 0),
+            "model_lab_cache_hit_rate": model_lab_status.get("cache_hit_rate", 0.0),
+            "model_lab_progress_pct": model_lab_status.get("progress_pct", 0.0),
+            "model_lab_active_stage": model_lab_status.get("active_stage"),
+            "model_lab_active_target": model_lab_status.get("active_target"),
+            "cpp_backend_status": backend_status(),
         }
+        if snapshot.model_lab is not None:
+            self.state.model_status.update(snapshot.model_lab.summary())
         if self.model_selection is not None:
             self.state.model_status.update(
                 {
@@ -522,6 +604,9 @@ class CMVAApplication:
             save_frame(snapshot.features.features, self.config.features_dir / "features.parquet")
             if snapshot.model_validation is not None:
                 save_frame(snapshot.model_validation.losses, self.config.validation_dir / "model_validation_losses.parquet")
+            if snapshot.model_lab is not None:
+                save_frame(snapshot.model_lab.leaderboard, self.config.models_dir / "model_lab_leaderboard.parquet")
+                save_frame(snapshot.model_lab.timelines, self.config.models_dir / "model_lab_timelines.parquet")
         except Exception as exc:
             self.state.log(f"Artifact persistence skipped: {exc}")
 
@@ -538,13 +623,6 @@ class CMVAApplication:
         if candles.empty or "interval" not in candles:
             return candles
         return candles.loc[candles["interval"] == self.config.interval].copy()
-
-
-def run_tui() -> None:
-    configure_logging()
-    from cmva.tui.app import CMVATuiApp
-
-    CMVATuiApp(CMVAApplication()).run()
 
 
 def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) -> None:

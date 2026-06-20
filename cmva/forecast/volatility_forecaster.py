@@ -1,4 +1,4 @@
-"""Portfolio and asset volatility forecasting service."""
+"""Symbol and basket volatility forecasting service."""
 
 from __future__ import annotations
 

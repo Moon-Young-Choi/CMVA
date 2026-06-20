@@ -1,4 +1,4 @@
-"""Application state shared by services and TUI."""
+"""Application state shared by services and the web UI."""
 
 from __future__ import annotations
 

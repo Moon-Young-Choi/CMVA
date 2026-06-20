@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Diagnostics{% endblock %}
+{% block heading %}Diagnostics{% endblock %}
+{% block content %}
+{{ ui.diagnostics_table("Model Diagnostics", snapshot.diagnostics.model) }}
+{{ ui.diagnostics_table("Forecast Diagnostics", snapshot.diagnostics.forecast) }}
+{{ ui.diagnostics_table("Risk Diagnostics", snapshot.diagnostics.risk) }}
+{{ ui.diagnostics_table("Validation Diagnostics", snapshot.diagnostics.validation) }}
+{{ ui.diagnostics_table("Regime Diagnostics", snapshot.diagnostics.regime) }}
+{% endblock %}

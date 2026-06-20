@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from cmva.native.backend import backend
+
 
 def rolling_beta(
     returns: pd.DataFrame,
@@ -17,9 +19,12 @@ def rolling_beta(
         return pd.DataFrame(index=returns.index)
     periods = min_periods or min(max(5, window // 4), window)
     benchmark = returns[benchmark_symbol]
-    variance = benchmark.rolling(window=window, min_periods=periods).var()
+    variance = pd.Series(backend.rolling_variance(benchmark.to_numpy(dtype=float), window, periods), index=returns.index)
     betas = {}
     for symbol in returns.columns:
-        covariance = returns[symbol].rolling(window=window, min_periods=periods).cov(benchmark)
+        covariance = pd.Series(
+            backend.rolling_covariance(returns[symbol].to_numpy(dtype=float), benchmark.to_numpy(dtype=float), window, periods),
+            index=returns.index,
+        )
         betas[symbol] = covariance / variance
     return pd.DataFrame(betas, index=returns.index)

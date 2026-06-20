@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from cmva.native.backend import backend
+
 
 def rolling_average_pairwise_correlation(
     returns: pd.DataFrame,
@@ -14,6 +16,8 @@ def rolling_average_pairwise_correlation(
 ) -> pd.Series:
     if returns.empty:
         return pd.Series(dtype=float, name="avg_pairwise_corr")
+    if max_exact_points is None or len(returns) <= max_exact_points:
+        return backend.rolling_average_correlation(returns, window).rename("avg_pairwise_corr")
     periods = min_periods or min(max(3, window // 4), window)
     index = returns.index
     step = 1

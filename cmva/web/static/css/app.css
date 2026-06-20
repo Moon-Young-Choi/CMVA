@@ -176,7 +176,8 @@ h2 {
   gap: 12px;
 }
 
-canvas.line-chart {
+canvas.line-chart,
+.echart.line-chart {
   display: block;
   width: 100%;
   height: 220px;
@@ -185,8 +186,13 @@ canvas.line-chart {
   border-radius: 6px;
 }
 
-canvas.wide {
+canvas.wide,
+.echart.wide {
   height: 300px;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 .table-wrap {
@@ -214,6 +220,19 @@ th {
   background: #f8fafc;
 }
 
+tr.flash-update td {
+  animation: row-flash 900ms ease;
+}
+
+@keyframes row-flash {
+  0% {
+    background: #dff6ee;
+  }
+  100% {
+    background: transparent;
+  }
+}
+
 .kv-list {
   display: grid;
   gap: 8px;
@@ -237,6 +256,49 @@ th {
   font-weight: 650;
 }
 
+.kv-list.compact {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 12px;
+}
+
+.kv-list.compact div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+}
+
+.progress-track {
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  min-width: 2px;
+  max-width: 100%;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.filter-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.filter-bar label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .settings-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -250,7 +312,8 @@ th {
   font-size: 0.86rem;
 }
 
-input {
+input,
+select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -258,6 +321,47 @@ input {
   font: inherit;
   color: var(--text);
   background: #ffffff;
+}
+
+.control-group {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 10px;
+  margin: 0;
+}
+
+.control-group legend {
+  color: var(--muted);
+  font-size: 0.86rem;
+  padding: 0 4px;
+}
+
+.check-row {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 8px !important;
+  color: var(--text) !important;
+}
+
+.check-row input {
+  width: auto;
+}
+
+.status-normal {
+  color: #027a48;
+}
+
+.status-warning {
+  color: #b54708;
+}
+
+.status-error {
+  color: #b42318;
+}
+
+.status-empty {
+  color: #667085;
 }
 
 button {

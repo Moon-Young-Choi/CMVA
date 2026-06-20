@@ -21,9 +21,18 @@ class CMVAConfig:
     symbols: list[str] = field(
         default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
     )
-    interval: str = "15m"
+    interval: str = "1h"
+    analysis_period: str = "1y"
+    training_window: str = "30d"
     forecast_horizon_bars: int = 1
     forecast_horizon: str = "1 bar"
+    refit_stride_bars: int = 1
+    search_mode: str = "two_stage"
+    candidate_model_count: int = 16
+    candidate_model_groups: list[str] = field(
+        default_factory=lambda: ["mean", "trend", "volatility", "combined"]
+    )
+    target_view: str = "both"
     historical_days: int = 365
     bootstrap_limit: int = 1000
     dashboard_time_range: str = "1d"
@@ -43,7 +52,7 @@ class CMVAConfig:
     severe_shock_threshold: float = 3.0
     moderate_shock_threshold: float = 2.0
     shock_breadth_threshold: float = 0.60
-    use_cpp: bool = False
+    use_cpp: bool = True
     data_dir: Path = Path("data")
     rest_base_url: str = "https://data-api.binance.vision"
     websocket_base_url: str = "wss://data-stream.binance.vision"
@@ -54,10 +63,26 @@ class CMVAConfig:
             raise ValueError("at least one symbol is required")
         self.symbols = symbols
         self.interval = normalize_interval(self.interval)
+        self.analysis_period = normalize_time_range(self.analysis_period)
         self.forecast_horizon_bars = int(self.forecast_horizon_bars)
         if self.forecast_horizon_bars <= 0:
             raise ValueError("forecast_horizon_bars must be positive")
         self.forecast_horizon = describe_horizon(self.interval, self.forecast_horizon_bars)
+        self.refit_stride_bars = max(1, int(self.refit_stride_bars))
+        self.search_mode = str(self.search_mode).strip().lower().replace("-", "_")
+        if self.search_mode not in {"two_stage", "fast", "detailed"}:
+            raise ValueError("search_mode must be one of: two_stage, fast, detailed")
+        self.candidate_model_count = max(1, int(self.candidate_model_count))
+        self.candidate_model_groups = [
+            str(group).strip().lower()
+            for group in self.candidate_model_groups
+            if str(group).strip()
+        ]
+        if not self.candidate_model_groups:
+            self.candidate_model_groups = ["mean", "trend", "volatility", "combined"]
+        self.target_view = str(self.target_view).strip().lower()
+        if self.target_view not in {"log_price", "log_return", "both"}:
+            raise ValueError("target_view must be one of: log_price, log_return, both")
         self.rolling_short_window = bars_for_duration(self.volatility_window, self.interval)
         self.rolling_medium_window = bars_for_duration(self.correlation_window, self.interval)
         self.rolling_long_window = bars_for_duration(self.pca_window, self.interval)

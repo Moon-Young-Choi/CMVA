@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}CMVA Model Comparison{% endblock %}
+{% block heading %}Model Comparison{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Leaderboard Filters</h2>
+  <form class="filter-bar js-table-filter" data-table-filter="#model-comparison-table">
+    <label>Family
+      <select name="family">
+        <option value="">All</option>
+        <option value="mean">Mean</option>
+        <option value="trend">Trend</option>
+        <option value="volatility">Volatility</option>
+        <option value="combined">Combined</option>
+      </select>
+    </label>
+    <label>Target
+      <select name="target">
+        <option value="">All</option>
+        <option value="log_return">Log Return</option>
+        <option value="log_price">Log Price</option>
+      </select>
+    </label>
+    <label>Top N
+      <input name="top_n" type="number" min="1" max="50" value="10">
+    </label>
+  </form>
+</section>
+<section class="panel">
+  <h2>Leaderboard</h2>
+  <div class="table-wrap">
+    <table id="model-comparison-table">
+      <thead><tr><th>Rank</th><th>Model ID</th><th>Family</th><th>Target</th><th>AIC Rank</th><th>BIC Rank</th><th>HQIC Rank</th><th>QLIKE Rank</th><th>RMSE</th><th>MAE</th><th>Convergence</th><th>Fit Time</th><th>Rank Stability</th><th>Latest Rank</th></tr></thead>
+      <tbody>
+      {% for row in snapshot.model_lab.leaderboard %}
+        <tr data-family="{{ row.family }}" data-target="{{ row.target }}" data-rank="{{ row.rank }}">
+          <td>{{ row.rank }}</td><td>{{ row.model_id }}</td><td>{{ row.family }}</td><td>{{ row.target }}</td>
+          <td>{{ row.aic_rank }}</td><td>{{ row.bic_rank }}</td><td>{{ row.hqic_rank }}</td><td>{{ row.avg_qlike_rank }}</td>
+          <td>{{ row.avg_rmse }}</td><td>{{ row.avg_mae }}</td><td>{{ row.converged }}</td><td>{{ row.fit_time_ms }}</td><td>{{ row.rank_stability }}</td><td>{{ row.rank }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="14">No leaderboard yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

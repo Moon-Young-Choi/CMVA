@@ -11,18 +11,19 @@
   <aside class="sidebar">
     <a class="brand" href="/">
       <strong>CMVA</strong>
-      <span>Market State Analytics</span>
+      <span>Quant Model Lab</span>
     </a>
     <nav>
-      <a class="{{ 'active' if page == 'dashboard' else '' }}" href="/">Dashboard</a>
-      <a class="{{ 'active' if page == 'markets' else '' }}" href="/markets">Markets</a>
+      <a class="{{ 'active' if page == 'setup' else '' }}" href="/setup">Setup</a>
+      <a class="{{ 'active' if page == 'overview' else '' }}" href="/overview">Overview</a>
+      <a class="{{ 'active' if page == 'data_quality' else '' }}" href="/data-quality">Data Quality</a>
+      <a class="{{ 'active' if page == 'model_lab' else '' }}" href="/model-lab">Model Lab</a>
+      <a class="{{ 'active' if page == 'current_market_state' else '' }}" href="/current-market-state">Current Market State</a>
+      <a class="{{ 'active' if page == 'trend_seasonality' else '' }}" href="/trend-seasonality">Trend & Seasonality</a>
       <a class="{{ 'active' if page == 'volatility' else '' }}" href="/volatility">Volatility</a>
-      <a class="{{ 'active' if page == 'trend' else '' }}" href="/trend">Trend</a>
-      <a class="{{ 'active' if page == 'correlation_pca' else '' }}" href="/correlation-pca">Correlation / PCA</a>
-      <a class="{{ 'active' if page == 'shock_regime' else '' }}" href="/shock-regime">Shock & Regime</a>
-      <a class="{{ 'active' if page == 'models' else '' }}" href="/models">Models</a>
-      <a class="{{ 'active' if page == 'validation' else '' }}" href="/validation">Backtest / Validation</a>
-      <a class="{{ 'active' if page == 'methodology' else '' }}" href="/methodology">Methodology</a>
+      <a class="{{ 'active' if page == 'diagnostics' else '' }}" href="/diagnostics">Diagnostics</a>
+      <a class="{{ 'active' if page == 'rolling_evaluation' else '' }}" href="/rolling-evaluation">Rolling Evaluation</a>
+      <a class="{{ 'active' if page == 'model_comparison' else '' }}" href="/model-comparison">Model Comparison</a>
       <a class="{{ 'active' if page == 'settings' else '' }}" href="/settings">Settings</a>
       <a class="{{ 'active' if page == 'logs' else '' }}" href="/logs">Logs</a>
     </nav>
@@ -46,6 +47,7 @@
     window.CMVA_GLOSSARY = {{ glossary | tojson }};
   </script>
   <script src="{{ url_for('static', path='/js/tooltip.js') }}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <script src="{{ url_for('static', path='/js/charts.js') }}"></script>
   {% block scripts %}{% endblock %}
   <script src="{{ url_for('static', path='/js/live.js') }}"></script>

@@ -5,9 +5,35 @@
 {% block content %}
 <section class="panel">
   <form method="post" action="/settings" class="settings-form">
+    <input type="hidden" name="next_path" value="/settings">
     <label>Symbols <input name="symbols" value="{{ cmva.config.symbols | join(', ') }}"></label>
-    <label>{{ ui.help_label("Primary Interval", "closed_candle") }} <input name="interval" value="{{ cmva.config.interval }}"></label>
-    <label>{{ ui.help_label("Forecast Horizon Bars", "garch_forecast") }} <input name="forecast_horizon_bars" type="number" min="1" value="{{ cmva.config.forecast_horizon_bars }}"></label>
+    <label>{{ ui.help_label("Analysis Period", "analysis_period") }} <input name="analysis_period" value="{{ cmva.config.analysis_period }}"></label>
+    <label>{{ ui.help_label("Primary Interval", "closed_candle") }}
+      <select name="interval">
+        {% for interval in ["1m","3m","5m","15m","30m","1h","2h","4h","6h","8h","12h","1d","3d","1w","1M"] %}
+        <option value="{{ interval }}" {{ "selected" if cmva.config.interval == interval else "" }}>{{ interval }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>{{ ui.help_label("Training Window", "training_window") }} <input name="training_window" value="{{ cmva.config.training_window }}"></label>
+    <label>{{ ui.help_label("Forecast Horizon Bars", "forecast_horizon") }} <input name="forecast_horizon_bars" type="number" min="1" value="{{ cmva.config.forecast_horizon_bars }}"></label>
+    <label>{{ ui.help_label("Refit Stride", "refit_stride") }} <input name="refit_stride_bars" type="number" min="1" value="{{ cmva.config.refit_stride_bars }}"></label>
+    <label>{{ ui.help_label("Search Mode", "two_stage_search") }}
+      <select name="search_mode">
+        {% for mode in ["two_stage", "fast", "detailed"] %}
+        <option value="{{ mode }}" {{ "selected" if cmva.config.search_mode == mode else "" }}>{{ mode }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>{{ ui.help_label("Candidate Count", "candidate_count") }} <input name="candidate_model_count" type="number" min="1" value="{{ cmva.config.candidate_model_count }}"></label>
+    <label>{{ ui.help_label("Target View", "target_view") }}
+      <select name="target_view">
+        {% for target in ["both", "log_return", "log_price"] %}
+        <option value="{{ target }}" {{ "selected" if cmva.config.target_view == target else "" }}>{{ target }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>{{ ui.help_label("Candidate Groups", "candidate_groups") }} <input name="candidate_model_groups_csv" value="{{ cmva.config.candidate_model_groups | join(', ') }}"></label>
     <label>{{ ui.help_label("Volatility Window", "realized_volatility") }} <input name="volatility_window" value="{{ cmva.config.volatility_window }}"></label>
     <label>{{ ui.help_label("Correlation Window", "average_correlation") }} <input name="correlation_window" value="{{ cmva.config.correlation_window }}"></label>
     <label>{{ ui.help_label("PCA Window", "pca1_share") }} <input name="pca_window" value="{{ cmva.config.pca_window }}"></label>

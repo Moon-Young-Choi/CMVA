@@ -5,13 +5,20 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from cmva.native.backend import backend
+
 
 def realized_volatility(returns: pd.Series | pd.DataFrame, window: int, min_periods: int | None = None):
-    periods = min_periods or min(max(3, window // 4), window)
+    if min_periods is None:
+        return backend.realized_volatility(returns, window)
+    periods = min_periods
     return returns.rolling(window=window, min_periods=periods).std()
 
 
 def ewma_volatility(returns: pd.Series, span: int = 24, min_periods: int = 3) -> pd.Series:
+    if min_periods == 3:
+        variance = backend.ewma_variance(returns, span)
+        return variance.pow(0.5) if isinstance(variance, pd.Series) else pd.Series(variance, index=returns.index).pow(0.5)
     return returns.pow(2).ewm(span=span, min_periods=min_periods, adjust=False).mean().pow(0.5)
 
 
@@ -19,8 +26,10 @@ def range_based_volatility(candles: pd.DataFrame, window: int, min_periods: int 
     if candles.empty:
         return pd.Series(dtype=float, name="range_vol")
     data = candles.copy()
-    high_low = np.log(data["high"] / data["low"]).replace([np.inf, -np.inf], np.nan)
-    parkinson = (high_low.pow(2) / (4.0 * np.log(2.0))).pow(0.5)
+    parkinson = pd.Series(
+        backend.range_based_volatility_array(data["high"].to_numpy(dtype=float), data["low"].to_numpy(dtype=float)),
+        index=data.index,
+    ).replace([np.inf, -np.inf], np.nan)
     data["range_vol"] = parkinson
     basket = data.pivot_table(index="open_time", columns="symbol", values="range_vol", aggfunc="last").mean(axis=1)
     periods = min_periods or min(max(3, window // 4), window)
